@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
+import { classifyLiveness } from '../liveness-core.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -39,6 +40,16 @@ const userFiles = {
   states: path.join(ROOT, 'templates', 'states.yml'),
   version: path.join(ROOT, 'VERSION'),
 };
+
+const REPORT_SECTION_LABELS = [
+  ['roleSummary', /^##\s+A\).*role summary/im],
+  ['match', /^##\s+B\).*match/im],
+  ['strategy', /^##\s+C\).*level.*strategy/im],
+  ['comp', /^##\s+D\).*comp/im],
+  ['customization', /^##\s+E\).*customization/im],
+  ['interview', /^##\s+F\).*interview/im],
+  ['legitimacy', /^##\s+G\).*posting legitimacy/im],
+];
 
 function send(res, status, body, headers = {}) {
   const payload = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);

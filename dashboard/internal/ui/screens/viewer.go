@@ -31,7 +31,7 @@ type ViewerModel struct {
 func NewViewerModel(t theme.Theme, path, title string, width, height int) ViewerModel {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		content = []byte("Error reading file: " + err.Error())
+		content = []byte("Error al leer el archivo: " + err.Error())
 	}
 
 	var lines []string
@@ -175,10 +175,10 @@ func (m ViewerModel) renderHeader() string {
 			pct = m.scrollOffset * 100 / maxScroll
 		}
 		if m.scrollOffset == 0 {
-			return "Top"
+			return "Inicio"
 		}
 		if m.scrollOffset >= maxScroll {
-			return "End"
+			return "Fin"
 		}
 		return func() string {
 			s := pct
@@ -200,7 +200,7 @@ func (m ViewerModel) renderBody() string {
 
 	if len(m.renderedLines) == 0 {
 		emptyStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
-		return padStyle.Render(emptyStyle.Render("(empty file)"))
+		return padStyle.Render(emptyStyle.Render("(archivo vacío)"))
 	}
 
 	end := m.scrollOffset + bh
@@ -619,8 +619,8 @@ func (m ViewerModel) renderFooter() string {
 	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 	return style.Render(
-		keyStyle.Render("↑↓") + descStyle.Render(" scroll  ") +
-			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
-			keyStyle.Render("g/G") + descStyle.Render(" top/end  ") +
-			keyStyle.Render("Esc") + descStyle.Render(" back"))
+		keyStyle.Render("↑↓") + descStyle.Render(" desplazar  ") +
+			keyStyle.Render("PgUp/Dn") + descStyle.Render(" página  ") +
+			keyStyle.Render("g/G") + descStyle.Render(" inicio/fin  ") +
+			keyStyle.Render("Esc") + descStyle.Render(" volver"))
 }

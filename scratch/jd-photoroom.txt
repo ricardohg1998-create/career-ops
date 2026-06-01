@@ -1,0 +1,77 @@
+Title: Marketing Operations Manager @ Photoroom
+
+ABOUT US
+Founded in 2019 and part of Y Combinator's 2020 cohort, Photoroom (https://www.photoroom.com) is the leading visual solution for e-commerce.
+We've raised Series B funding and reached 300+ million users worldwide, processing over 5 billion images annually and serving both small businesses and major enterprises like Amazon, DoorDash, and Decathlon through our mobile app, web platform, and API.
+We're a remote-friendly team of 100+ passionate builders giving e-commerce businesses superpowers to create visuals that help them grow, making the hardest parts of selling online disappear. We focus on craft, innovation, and collaboration, creating exceptional impact for e-commerce businesses worldwide.
+
+ROLE SUMMARY
+The Marketing Operations Manager is responsible for building and optimising the operational infrastructure behind Photoroom’s enterprise marketing motion. This role ensures that enterprise campaigns, account-based programs, lifecycle nurtures, and PQL-to-sales flows are executed with precision, measurable impact, and clean data integrity. The focus is on translating enterprise marketing strategy into scalable automation, accurate attribution, structured lead management, and reliable reporting within HubSpot Marketing Hub. Working in close partnership with the Head of Enterprise Marketing, RevOps, and Data, this person operationalises how enterprise demand is captured, nurtured, qualified, and handed off, ensuring that marketing-generated enterprise pipeline is structured, trackable, and continuously optimised within the broader revenue framework.
+
+Compensation: €60k-75k base salary
+Location: Work flexibly from Germany, UK, Italy, France, Ireland, Portugal or Spain, with monthly Paris office visits (fully reimbursed)
+
+ABOUT THE ROLE
+CAMPAIGN OPERATIONS & AUTOMATION
+ - Build, QA, and maintain marketing campaign workflows in HubSpot Marketing Hub, including lifecycle nurture sequences, re-engagement programs, enterprise prospect journeys, and trial-to-paid flows
+ - Own the configuration of automated email programs: segmentation logic, branching conditions, send-time optimisation, suppression lists, and deliverability monitoring
+ - Manage campaign scheduling, list management, and audience targeting across HubSpot and in coordination with Braze (B2C lifecycle tool), ensuring consistent logic and clean audience segmentation
+ - Maintain documentation for all marketing automation workflows and campaign logic
+
+ATTRIBUTION & MARKETING ANALYTICS
+ - Manage campaign-level and channel-level attribution within HubSpot Marketing Hub, ensuring accurate marketing-source tracking across paid, organic, email, events, and PLG acquisition
+ - Implement and maintain UTM taxonomy, source tracking standards, and conversion event tagging across all marketing channels
+ - Conduct regular data quality audits on marketing attribution and campaign performance data
+ - Build and maintain marketing performance dashboards focused on traffic, lead generation, MQL/PQL creation, and marketing-sourced pipeline contribution
+
+LEAD MANAGEMENT & FUNNEL OPERATIONS
+ - Operationalise lifecycle stage automation for marketing-qualified leads (MQL, PQL) in alignment with the broader revenue framework
+ - Manage list segmentation and audience building for all marketing programs, including ICP filters, behavioural triggers, and engagement scoring
+ - Configure and maintain routing rules for marketing-generated leads, ensuring correct assignment based on predefined revenue team logic
+ - Monitor marketing-to-sales conversion metrics and surface funnel insights to Marketing and RevOps for optimisation
+
+ABM & ENTERPRISE MARKETING OPERATIONS
+ - Operationalise account-based marketing programs in HubSpot: build target account lists, configure account-level tracking, and monitor engagement signals
+ - Support enterprise marketing initiatives through intent data integration, account scoring configuration, and personalised nurture orchestration
+ - Track event and webinar performance from registration through marketing-qualified pipeline creation, including post-event nurture management
+
+ABOUT YOU
+ - 3–5 years in a Marketing Operations, Demand Generation Operations, or Marketing Automation role at B2B SaaS company
+ - Deep, hands-on HubSpot Marketing Hub experience, you have built workflows, managed lists, set up nurture programs, and debugged attribution issues yourself.
+ - Solid understanding of B2B marketing funnels: what MQL/PQL/SQL mean operationally, how leads move through stages, and what good and bad funnel data looks like
+ - Experience building multi-touch attribution models or working within a structured attribution framework
+ - Comfortable with UTM management, tracking pixel implementation, and basic HTML for email troubleshooting
+ - Strong analytical instinct, you spot data problems before they compound, and you translate marketing data into actionable insight rather than vanity metrics
+
+Strong plus:
+ - Experience with Braze or a comparable B2C lifecycle/CRM tool
+ - Familiarity with ABM platforms (e.g., 6sense, Demandbase, RollWorks) or intent data tools
+ - Experience working alongside a RevOps function and understanding where the two remits connect
+ - Experience in a company with both a self-serve and sales-assisted motion
+
+WHAT SUCCESS LOOKS LIKE IN THE FIRST 6 MONTHS:
+ - Marketing attribution framework implemented and aligned with the existing revenue reporting structure
+ - Enterprise and trial-to-paid nurture programs live with measurable improvements in MQL/PQL conversion rates
+ - Marketing automation infrastructure fully documented and auditable
+ - Reliable, trusted marketing performance dashboards used weekly by the Marketing team
+ - Clear visibility into marketing-generated lead volume, conversion, and pipeline contribution
+
+BENEFITS
+ - Work flexibly from Germany, UK, Italy, France, Ireland, Portugal or Spain
+ - Regular team gatherings, including in-person onboarding in Paris (1–2 weeks), yearly company offsite, team retreats, and quarterly in-person meetings
+ - 30 days annual leave plus local public holidays
+ - Competitive equity package with stock options/BSPCE
+ - €1000 one-time home office grant OR €400 per month co-working space stipend [EMEA only - Remote outside of Paris]
+ - €1,000 annual learning and development budget
+ - Private health insurance
+ - Access to personalised mental health support via MokaCare
+ - Sports and cultural activities reimbursement
+ - Relocation support (up to €10k) for those choosing to move to France (visa + housing support)
+Note: Visa sponsorship and relocation support are only available for roles based in France.
+
+HIRING PROCESS
+ 1. Screening call with Talent Manager (30 min)
+ 2. Technical interview with Hiring Manager (45 min)
+ 3. Take-home assignment and live review with the team (45 min)
+ 4. Culture fit interviews and meet the team (~3h total)
+ 5. Reference check and offer

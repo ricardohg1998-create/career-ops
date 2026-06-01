@@ -70,7 +70,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		err := data.UpdateApplicationStatus(msg.CareerOpsPath, msg.App, msg.NewStatus)
 		if err != nil {
 			// Log the error but still reload data to keep UI consistent
-			fmt.Fprintf(os.Stderr, "WARN: status update failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "ADVERTENCIA: falló la actualización del estado: %v\n", err)
 		}
 		m.reloadPipelineData()
 		return m, nil
@@ -152,7 +152,7 @@ func (m appModel) View() string {
 }
 
 func main() {
-	pathFlag := flag.String("path", ".", "Path to career-ops directory")
+	pathFlag := flag.String("path", ".", "Ruta al directorio de career-ops")
 	flag.Parse()
 
 	careerOpsPath := *pathFlag
@@ -160,7 +160,7 @@ func main() {
 	// Load applications
 	apps := data.ParseApplications(careerOpsPath)
 	if apps == nil {
-		fmt.Fprintf(os.Stderr, "Error: could not find applications.md in %s or %s/data/\n", careerOpsPath, careerOpsPath)
+		fmt.Fprintf(os.Stderr, "Error: no se pudo encontrar applications.md en %s o en %s/data/\n", careerOpsPath, careerOpsPath)
 		os.Exit(1)
 	}
 

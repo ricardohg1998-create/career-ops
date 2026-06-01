@@ -1,0 +1,75 @@
+PRODUCT MARKETING MANAGER, ENTERPRISE - SUPABASE
+
+Supabase is the Postgres development platform, built by developers for developers. We provide a complete backend solution including Database, Auth, Storage, Edge Functions, Realtime, and Vector Search. All services are deeply integrated and designed for growth.
+
+We are seeking an AI-fluent Product Marketing Manager to drive enterprise go-to-market strategy, sales enablement, and competitive intelligence at Supabase. You'll work at the cutting edge of AI-powered marketing, using LLMs and custom code utilities to scale everything from enterprise positioning to competitive battle cards, while maintaining the strategic thinking and technical depth that wins trust with developers and buyers alike.
+
+This is an opportunity to shape how a fast-growing developer platform moves upmarket — translating product-led growth into enterprise revenue. You'll partner closely with Sales, Product, and Engineering to build the GTM muscle that turns Supabase from a developer favorite into an enterprise standard. If you're looking to own enterprise product marketing at a company with serious momentum and an iconic developer brand, this role will accelerate your career.
+
+This role combines enterprise GTM strategy, sales enablement, competitive intelligence, and market positioning in an environment where your technical skills and marketing instincts will be equally valued.
+
+WHAT YOU WILL DO
+ - Own enterprise positioning and messaging; develop the narrative for how Supabase wins against incumbent databases, BaaS platforms, and cloud-native alternatives in enterprise evaluations
+ - Build and maintain competitive intelligence programs; battle cards, win/loss analysis, feature comparisons, and objection-handling guides that arm the sales team with what they need to close
+ - Create sales enablement assets; pitch decks, one-pagers, ROI frameworks, technical briefs, security/compliance collateral, and deal-specific content that accelerates enterprise sales cycles
+ - Develop enterprise GTM playbooks that account for multi stakeholder buying processes, procurement cycles, and the developer to executive influence chain
+ - Write code utilities to track competitive landscape changes, analyze win/loss data, automate deal intelligence, and monitor enterprise market trends
+ - Use AI tools and LLMs to automate competitive research, synthesize analyst reports, generate enablement materials, and build early-warning systems for market shifts
+ - Partner with Sales and Solutions Engineering to understand enterprise objections, feature gaps, and buying patterns. Then feed those insights back into product and positioning
+ - Conduct market research and customer interviews that surface actionable insights on enterprise buyer needs, competitive positioning, and expansion opportunities
+ - Own enterprise-focused content; case studies, customer stories, technical whitepapers, and migration guides that build credibility with enterprise buyers and evaluators
+ - Define and track key enterprise marketing metric; pipeline influence, win rates by segment, competitive displacement rates, and content engagement across the buyer journey
+ - Coordinate with Product to influence enterprise roadmap priorities based on competitive gaps, customer feedback, and market demands
+ - Support pricing and packaging decisions with market data, competitive benchmarking, and willingness to pay analysis
+
+WHO YOU ARE
+CORE EXPERIENCE
+ - 5+ years of experience in Product Marketing with a focus on enterprise or B2B SaaS
+ - Proven track record in sales enablement, competitive intelligence, or enterprise GTM at a high growth startup or developer tools company
+ - Hands on experience building competitive programs, sales collateral, and enterprise positioning from the ground up
+ - A current or former developer who codes for work, fun, and/or enjoyment. Supabase is a developer focused company. Developers are our lifeblood. At Supabase, Product Marketing are developers, too.
+
+AI FLUENCY REQUIREMENTS (ESSENTIAL)
+ - Advanced LLM usage: You use Claude, ChatGPT, or similar tools for tasks beyond content writing; competitive analysis, deal intelligence, research automation, workflow optimization
+ - Code utility creation: You write Python, JavaScript, or similar scripts for competitive monitoring, data analysis, win/loss tracking, or enablement automation
+ - Research automation: You use AI tools to conduct comprehensive market research, analyze competitor strategies, and synthesize enterprise buyer signals
+ - Workflow optimization: You've built AI-enhanced processes that scale marketing operations
+
+TECHNICAL AND COMMUNICATION SKILLS
+ - Strong writer who can translate complex technical capabilities into business value for both developers and enterprise buyers
+ - Technical enough to understand database architectures, developer workflows, and infrastructure trade-offs; not just at surface level
+ - Experience with enterprise sales cycles, multi-stakeholder buying processes, and the developer to CTO influence chain
+ - Proven ability to build strong working relationships with Sales, Solutions Engineering, and Product teams
+ - Organized and detail oriented with experience making complex processes repeatable
+ - Experience with developer infrastructure, open source, databases, or PLG-to-enterprise motion preferred
+ - 100% comfortable in a remote environment: self-directed and highly communicative
+
+WHAT WE OFFER
+ - Fully Remote: We hire globally. We believe you can do your best work from anywhere. There are no Supabase offices, but we provide a WeWork membership or co-working allowance you can use anywhere in the world.
+ - ESOP: Every team member receives ESOP (equity ownership) in the company. We want everyone to share in the upside of what we’re building together.
+ - Tech Allowance: Use this budget to set up your ideal work environment—laptop, monitor, headphones, or whatever helps you do your best work.
+ - Health Benefits: Supabase covers 100% of health insurance for employees and 80% for dependents, wherever you are. Your wellbeing and your family’s health are important to us.
+ - Annual Off-Sites: Once a year, the entire company gathers in a new city for a week of connection, collaboration, and fun. It’s a highlight of our year.
+ - Flexible Work: We operate asynchronously and trust you to manage your own time. You know what needs to be done and when.
+ - Professional Development: Every team member receives an annual education allowance to spend on learning—courses, books, conferences, or anything that supports your growth.
+
+ABOUT THE TEAM
+Supabase was born-remote and open-source-first. We believe our globally distributed team is our secret weapon in building tools developers love.
+ - 280+ team members
+ - 55+ countries
+ - 20+ languages spoken
+ - $500M raised
+ - 500,000+ community members
+We move fast, build in public, and use what we ship. If it’s in your project, we probably use it in ours too. We believe deeply in the open-source ecosystem and strive to support—not replace—existing tools and communities.
+
+HIRING PROCESS
+We keep things simple, async-friendly, and respectful of your time:
+ 1. Apply – Our team will review your application.
+ 2. Intro Call – A short video chat to get to know each other.
+ 3. Interviews – Up to four calls with:
+    - Team Leads
+    - Future teammates
+    - Someone cross-functional from product, growth, or engineering (depending on the role)
+    - Someone from our leadership/founding team
+ 4. Decision – We may follow up with a final question or go straight to offer.
+All communication is remote and we aim to move fast.

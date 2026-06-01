@@ -1,0 +1,363 @@
+COMPANY: Desconocida
+ROLE: Desconocido
+URL: https://www.linkedin.com/jobs/view/4413899447
+
+DESCRIPTION:
+0 notificaciones
+Ir al contenido principal
+Inicio
+Mi red
+Empleos
+Mensajes
+Notificaciones
+Yo
+Para negocios
+
+Reactivar Premium con un -50 %
+
+Spendesk
+
+Junior Growth Engineer
+
+ Barcelona, Cataluña, España  · hace 2 semanas · 52 personas han hecho clic
+
+Respuestas gestionadas fuera de LinkedIn
+
+Híbrido
+Jornada completa
+Solicitar
+Guardar
+
+Mira una comparación con las otras 52 personas que han hecho clic en «Solicitar»
+
+Accede a información exclusiva sobre los candidatos, mira empleos donde tienes más probabilidades de recibir respuesta y mucho más.
+
+Reactivar Premium con un -50 %
+
+Personas con las que puedes hablar
+
+Conoce al equipo de contratación
+
+Jean-Christophe W. 
+
+• 3er
+
+Growth Engineer at Spendesk 💳 | ex-Pictarine
+
+Enviar mensaje
+Acerca del empleo
+
+About The Job
+
+We are looking for a talented Growth Engineer to join our Growth Squad and help shape how Spendesk acquires and converts customers. You'll be part of a small, cross-functional team of engineers and marketers working at the intersection of web development, experimentation, and performance, building directly on the surfaces that drive Spendesk's growth.
+
+This is a role for someone at the start of their engineering career who wants to grow fast. You will not be maintaining things in a queue. You will be building landing pages, running A/B experiments, owning tracking, and contributing to agentic AI workflows across marketing and GTM, a capability we are actively developing and that most teams are only just beginning to think about.
+
+You will report to a Senior Growth Engineer who is invested in your development, and work closely with the marketing team to understand campaigns, experiments, and what the data actually means.
+
+One thing worth being clear about: AI tools are not optional here. We expect everyone in the squad to use them every day, not as a crutch, but as a genuine multiplier. Prompting well, validating outputs, and owning the code you ship is a core part of how we work.
+
+Our stack
+
+
+Frontend:Nuxt.js, Vue.js, TypeScript
+CMS:Storyblok
+Experimentation:Amplitude Experiment
+Analytics:Amplitude, Google Analytics, Google Search Console
+Tracking:Segment
+CRM / Marketing Ops:HubSpot, Salesforce
+Deployment:Netlify
+AI Dev Tools:Cursor, GitHub Copilot, Dust, Claude Code
+Project Management:Linear, Notion
+
+
+Key Responsibilities
+
+
+Build and maintain pages and components on the Spendesk and CFO Connect websites using Nuxt.js and Storyblok, including landing pages, blog, and product pages
+Implement A/B tests and UX variants in collaboration with the Senior Growth Engineer and marketing team, and start reading experiment results to translate them into concrete site improvements
+Apply SEO best practices on every page you build: metadata, structured data, semantic HTML, done properly from the start
+Monitor Core Web Vitals on pages you own and surface regressions before they become problems
+Implement tracking events and funnels via Segment on every feature you ship, and verify data accuracy in Amplitude and Google Analytics
+Contribute to the development of agentic AI workflows across marketing and GTM alongside the team
+Participate in code review as a genuine learning opportunity, and write clean, readable code that others can work with
+Use AI coding assistants (Cursor, Claude Code, GitHub Copilot) as first-line tools for writing boilerplate, debugging, and understanding patterns faster
+
+
+What We're Looking For
+
+
+Fluency in written and spoken English (our business language)
+Up to two years of front-end development experience, from an internship, apprenticeship, bootcamp, or your own projects. What you have built matters more than where
+Working knowledge of JavaScript (ES6+), HTML5, and CSS3
+Basic understanding of Vue.js or any modern component-based framework such as React or Svelte
+Genuine comfort using AI tools (Cursor, Copilot, ChatGPT or similar) as part of your actual daily workflow
+Curiosity about web performance, user experience, and how your work connects to business outcomes
+Strong attention to detail: the kind that means you notice something is off and fix it rather than leave it
+Bonus: exposure to Nuxt.js, a headless CMS (Storyblok, Cont
+
+
+As we are an international team, please submit your application and CV in English.
+
+About Spendesk
+
+Spendesk is the AI-powered spend management and procurement platform that transforms company spending. By simplifying procurement, payment cards, expense management, invoice processing, and accounting automation, Spendesk sets the new standard for spending at work. Its single, intelligent solution makes efficient spending easy for employees and gives finance leaders the full visibility and control they need across all company spend, even in multi-entity structures. Trusted by thousands of companies, Spendesk supports over 200,000 users across brands such as Payfit, Accor, Welcome to the Jungle, Swile, Big Mamma, Malt and Yousign. With offices in the United Kingdom, France, Spain and Germany, Spendesk also puts community at the heart of its mission.
+
+For more information: www.spendesk.com/press
+
+About Our People & Culture
+
+We believe that people do their best work when they’re given the freedom to thrive and grow. That’s why liberation is at the core of everything we do. We empower Spendeskers to take ownership of their work, to navigate ambiguity, and seize every opportunity. Spendeskers come from all over the world (35+ countries and counting!) but we have plenty in common: we're bold, ever-curious, committed to kindness, and tackle every challenge with a positive mindset.
+
+About Our Benefits
+
+Our culture is built on trust, empowerment, and growth — with benefits to match!
+
+
+Flexible on-site and remote policy (up to 4 days per month + 3 non-consecutive weeks per year)
+Alan health insurance (fully covered by Spendesk)
+Meal vouchers through Edenred (€6 per working day)
+100% reimbursement on public transportation subscription
+Access to Moka.care for emotional and mental health wellbeing
+28 days of holidays
+Latest Apple equipment
+Great office snacks to fuel your day
+A positive team to work with daily!
+
+
+Diversity & Inclusion
+
+At Spendesk, we're committed to fostering an environment where all differences are encouraged, supported and celebrated. We're building our culture for everyone, with everyone. Our goal is to attract and build a diverse, equal and inclusive team, where everyone feels welcome and we truly embrace and encourage people from all backgrounds to apply.
+… más
+
+Beneficios encontrados en el anuncio
+
+Medical insurance
+
+Establecer una alerta para empleos similares
+
+Ingeniero de marketing, Barcelona, Cataluña, España
+
+Desactivado
+
+Búsqueda de empleo más rápida con Premium
+
+Accede a información sobre empresas como prioridades estratégicas, tendencias de personal y más.
+
+Carla y millones de miembros más usan Premium
+
+Reactivar Premium
+
+Cancela en cualquier momento. Sin cargos ocultos.
+
+Acerca de la empresa
+
+Spendesk
+
+55.241 seguidores
+
+Seguir
+
+Desarrollo de software
+
+ • 
+
+501-1000 empleados
+
+ • 
+
+330 en LinkedIn
+
+Spendesk is the AI-powered spend management and procurement platform that transforms company spending. 
+
+By simplifying procurement, payment cards, expense management, invoice processing, and accounting automation, Spendesk sets the new standard for spending at work. Its single, intelligent solution makes efficient spending easy for employees and gives finance leaders the full visibility and control they need across all company spend, even in multi-entity structures. 
+
+Trusted by thousands of companies, Spendesk is proud to have over 200,000 users across France, the UK, Germany and Spain. 
+
+Spendesk also puts community at the heart of spend management. Spendesk-backed CFO Connect is the largest finance community in Europe with more than 12,000 members. Learn more: http://www.cfoconnect.eu/
+… más
+
+Mostrar más
+Más empleos
+
+Ingeniero Senior Promoción Renovable 
+
+Hays
+
+Orense (Híbrido)
+
+Evaluando solicitudes de forma activa
+
+Publicado hace 2 días
+hace 2 días
+
+ · 
+
+ Solicitud sencilla
+
+GTM Engineer 
+
+Strativ Group
+
+Barcelona (En remoto)
+
+Evaluando solicitudes de forma activa
+
+Publicado hace 3 semanas
+hace 3 semanas
+
+ · 
+
+ Solicitud sencilla
+
+ Growth Engineer 
+
+Claire Joster | People first
+
+Barcelona (Presencial)
+
+Evaluando solicitudes de forma activa
+
+Publicado hace 1 semana
+hace 1 semana
+
+ · 
+
+ Solicitud sencilla
+
+Salesforce Marketing Cloud Engineer
+
+Fever
+
+Madrid (Híbrido)
+
+51 antiguos alumnos trabajan aquí
+
+Publicado hace 2 semanas
+hace 2 semanas
+
+GTM Engineer 
+
+Plug and Play Tech Center
+
+Valencia/València (Presencial)
+
+6 antiguos alumnos trabajan aquí
+
+Publicado hace 2 semanas
+hace 2 semanas
+
+Salesforce Marketing Cloud & Data Cloud Engineer 
+
+VISEO
+
+Barcelona (Híbrido)
+
+Publicado hace 1 hora
+hace 1 hora
+
+AI DevSecOps Engineer - Customer & Marketing (m/f/d) 
+
+MEDIA MARKT SATURN ADMINISTRACION ESPAÑA S.A.U
+
+Barcelona
+
+12 antiguos alumnos trabajan aquí
+
+Publicado hace 2 semanas
+hace 2 semanas
+
+Ver más empleos como este
+
+Búsqueda de empleo más eficaz con Premium
+
+Envía mensajes directamente a los técnicos de selección de personal y aumenta tus probabilidades de recibir respuesta. De media, los miembros Premium tienen 2,6 veces más probabilidades de conseguir empleo.
+
+Carla y millones de miembros más usan Premium
+
+Reactiva Premium con un -50 %
+
+Cancela en cualquier momento. Sin cargos ocultos.
+
+¿Estás buscando candidatos?
+
+Anuncia un empleo
+
+Acerca de
+
+Accesibilidad
+
+Talent Solutions
+
+Pautas comunitarias
+
+Empleo
+
+Marketing Solutions 
+
+Privacidad y condiciones
+
+Opciones de publicidad
+
+Publicidad
+
+Sales Solutions
+
+Móvil
+
+Pequeñas empresas
+
+Centro de seguridad
+
+LinkedIn Corporation © 2026
+
+¿Tienes preguntas?
+
+Visita nuestro Centro de ayuda.
+
+Gestiona tu cuenta y la privacidad
+
+Accede a tu Configuración.
+
+Transparencia de las recomendaciones
+
+Más información sobre el contenido recomendado.
+
+Seleccionar idioma
+
+العربية (árabe)
+বাংলা (bengalí)
+Čeština (checo)
+Dansk (danés)
+Deutsch (alemán)
+Ελληνικά (griego)
+English (inglés)
+Español
+لاررل (persa)
+Suomi (finlandés)
+Français (francés)
+हिंदी (hindi)
+Magyar (húngaro)
+Bahasa Indonesia (indonesio)
+Italiano (italiano)
+עברית (hebreo)
+日本語 (japonés)
+한국어 (coreano)
+मराठी (marati)
+Bahasa Malaysia (malayo)
+Nederlands (neerlandés)
+Norsk (noruego)
+ਪੰਜਾਬੀ (punyabí)
+Polski (polaco)
+Português (portugués)
+Română (rumano)
+Русский (ruso)
+Svenska (sueco)
+తెలుగు (telugu)
+ภาษาไทย (tailandés)
+Tagalog (tagalo)
+Türkçe (turco)
+Українська (ucraniano)
+Tiếng Việt (vietnamita)
+简体中文 (chino simplificado)
+正體中文 (chino tradicional)

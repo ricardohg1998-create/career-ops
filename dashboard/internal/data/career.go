@@ -655,11 +655,11 @@ func ComputeProgressMetrics(apps []model.CareerApplication) model.ProgressMetric
 	offer := statusCounts["offer"]
 
 	pm.FunnelStages = []model.FunnelStage{
-		{Label: "Evaluated", Count: total, Pct: 100.0},
-		{Label: "Applied", Count: applied, Pct: safePct(applied, total)},
-		{Label: "Responded", Count: responded, Pct: safePct(responded, applied)},
-		{Label: "Interview", Count: interview, Pct: safePct(interview, applied)},
-		{Label: "Offer", Count: offer, Pct: safePct(offer, applied)},
+		{Label: "Evaluadas", Count: total, Pct: 100.0},
+		{Label: "Aplicadas", Count: applied, Pct: safePct(applied, total)},
+		{Label: "Respondidas", Count: responded, Pct: safePct(responded, applied)},
+		{Label: "Entrevista", Count: interview, Pct: safePct(interview, applied)},
+		{Label: "Oferta", Count: offer, Pct: safePct(offer, applied)},
 	}
 
 	// Rates (relative to applied)

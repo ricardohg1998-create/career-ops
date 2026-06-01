@@ -81,19 +81,19 @@ type pipelineTab struct {
 }
 
 var pipelineTabs = []pipelineTab{
-	{filterAll, "ALL"},
-	{filterEvaluated, "EVALUATED"},
-	{filterApplied, "APPLIED"},
-	{filterInterview, "INTERVIEW"},
+	{filterAll, "TODAS"},
+	{filterEvaluated, "EVALUADAS"},
+	{filterApplied, "APLICADAS"},
+	{filterInterview, "ENTREVISTAS"},
 	{filterTop, "TOP ≥4"},
-	{filterSkip, "SKIP"},
-	{filterRejected, "REJECTED"},
-	{filterDiscarded, "DISCARDED"},
+	{filterSkip, "IGNORADAS"},
+	{filterRejected, "RECHAZADAS"},
+	{filterDiscarded, "DESCARTADAS"},
 }
 
 var sortCycle = []string{sortScore, sortDate, sortCompany, sortStatus}
 
-var statusOptions = []string{"Evaluated", "Applied", "Responded", "Interview", "Offer", "Rejected", "Discarded", "SKIP"}
+var statusOptions = []string{"Evaluado", "Aplicado", "Respondido", "Entrevista", "Oferta", "Rechazado", "Descartado", "Ignorar"}
 
 // statusGroupOrder defines display order for grouped view.
 var statusGroupOrder = []string{"interview", "offer", "responded", "applied", "evaluated", "skip", "rejected", "discarded"}
@@ -722,13 +722,13 @@ func (m PipelineModel) renderSearchBar() string {
 	}
 
 	tabFiltered := m.countForFilter(pipelineTabs[m.activeTab].filter)
-	matchInfo := hintStyle.Render(fmt.Sprintf("  %d/%d matching", len(m.filtered), tabFiltered))
+	matchInfo := hintStyle.Render(fmt.Sprintf("  %d/%d coincidentes", len(m.filtered), tabFiltered))
 
 	hint := ""
 	if m.searchInput {
-		hint = hintStyle.Render("   Enter: keep   Esc: cancel   Ctrl+U: clear")
+		hint = hintStyle.Render("   Enter: confirmar   Esc: cancelar   Ctrl+U: limpiar")
 	} else {
-		hint = hintStyle.Render("   Esc: clear   /: edit")
+		hint = hintStyle.Render("   Esc: limpiar   /: editar")
 	}
 
 	return style.Render(prompt + " " + display + matchInfo + hint)
@@ -744,9 +744,9 @@ func (m PipelineModel) renderHeader() string {
 
 	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	avg := fmt.Sprintf("%.1f", m.metrics.AvgScore)
-	info := right.Render(fmt.Sprintf("%d offers | Avg %s/5", m.metrics.Total, avg))
+	info := right.Render(fmt.Sprintf("%d ofertas | Media %s/5", m.metrics.Total, avg))
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("CAREER PIPELINE")
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("PIPELINE DE EMPLEO")
 	gap := m.width - lipgloss.Width(title) - lipgloss.Width(info) - 4
 	if gap < 1 {
 		gap = 1
@@ -835,9 +835,27 @@ func (m PipelineModel) renderSortBar() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	sortLabel := fmt.Sprintf("[Sort: %s]", m.sortMode)
-	viewLabel := fmt.Sprintf("[View: %s]", m.viewMode)
-	count := fmt.Sprintf("%d shown", len(m.filtered))
+	sMode := m.sortMode
+	switch sMode {
+	case sortScore:
+		sMode = "puntuación"
+	case sortDate:
+		sMode = "fecha"
+	case sortCompany:
+		sMode = "empresa"
+	case sortStatus:
+		sMode = "estado"
+	}
+	vMode := m.viewMode
+	switch vMode {
+	case "grouped":
+		vMode = "agrupada"
+	case "flat":
+		vMode = "lista"
+	}
+	sortLabel := fmt.Sprintf("[Orden: %s]", sMode)
+	viewLabel := fmt.Sprintf("[Vista: %s]", vMode)
+	count := fmt.Sprintf("%d mostradas", len(m.filtered))
 
 	return style.Render(fmt.Sprintf("%s  %s  %s", sortLabel, viewLabel, count))
 }
@@ -847,7 +865,7 @@ func (m PipelineModel) renderBody() string {
 		emptyStyle := lipgloss.NewStyle().
 			Foreground(m.theme.Subtext).
 			Padding(1, 2)
-		return emptyStyle.Render("No offers match this filter")
+		return emptyStyle.Render("Ninguna oferta coincide con este filtro")
 	}
 
 	var lines []string
@@ -986,14 +1004,14 @@ func (m PipelineModel) renderPreview() string {
 		}
 		if summary.remote != "" {
 			lines = append(lines, padStyle.Render(
-				labelStyle.Render("Remote: ")+valueStyle.Render(summary.remote)))
+				labelStyle.Render("Remoto: ")+valueStyle.Render(summary.remote)))
 		}
 	} else if app.Notes != "" {
 		// Fallback: show notes
 		notes := truncateRunes(app.Notes, m.width-10)
 		lines = append(lines, padStyle.Render(dimStyle.Render(notes)))
 	} else {
-		lines = append(lines, padStyle.Render(dimStyle.Render("Loading preview...")))
+		lines = append(lines, padStyle.Render(dimStyle.Render("Cargando vista previa...")))
 	}
 
 	return strings.Join(lines, "\n")
@@ -1011,32 +1029,32 @@ func (m PipelineModel) renderHelp() string {
 
 	if m.statusPicker {
 		return style.Render(
-			keyStyle.Render("↑↓/jk") + descStyle.Render(" navigate  ") +
-				keyStyle.Render("Enter") + descStyle.Render(" confirm  ") +
-				keyStyle.Render("Esc") + descStyle.Render(" cancel"))
+			keyStyle.Render("↑↓/jk") + descStyle.Render(" navegar  ") +
+				keyStyle.Render("Enter") + descStyle.Render(" confirmar  ") +
+				keyStyle.Render("Esc") + descStyle.Render(" cancelar"))
 	}
 
 	if m.searchInput {
 		return style.Render(
-			keyStyle.Render("type") + descStyle.Render(" filter live  ") +
-				keyStyle.Render("Enter") + descStyle.Render(" keep  ") +
-				keyStyle.Render("Ctrl+U") + descStyle.Render(" clear  ") +
-				keyStyle.Render("Esc") + descStyle.Render(" cancel"))
+			keyStyle.Render("escribir") + descStyle.Render(" filtrar en vivo  ") +
+				keyStyle.Render("Enter") + descStyle.Render(" mantener  ") +
+				keyStyle.Render("Ctrl+U") + descStyle.Render(" limpiar  ") +
+				keyStyle.Render("Esc") + descStyle.Render(" cancelar"))
 	}
 
 	brand := lipgloss.NewStyle().Foreground(m.theme.Overlay).Render("career-ops by santifer.io")
 
 	keys := keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +
-		keyStyle.Render("←→/hl") + descStyle.Render(" tabs  ") +
-		keyStyle.Render("/") + descStyle.Render(" search  ") +
-		keyStyle.Render("s") + descStyle.Render(" sort  ") +
-		keyStyle.Render("r") + descStyle.Render(" refresh  ") +
-		keyStyle.Render("Enter") + descStyle.Render(" report  ") +
-		keyStyle.Render("o") + descStyle.Render(" open URL  ") +
-		keyStyle.Render("c") + descStyle.Render(" change  ") +
-		keyStyle.Render("v") + descStyle.Render(" view  ") +
-		keyStyle.Render("p") + descStyle.Render(" progress  ") +
-		keyStyle.Render("q") + descStyle.Render(" quit")
+		keyStyle.Render("←→/hl") + descStyle.Render(" pestañas  ") +
+		keyStyle.Render("/") + descStyle.Render(" buscar  ") +
+		keyStyle.Render("s") + descStyle.Render(" ordenar  ") +
+		keyStyle.Render("r") + descStyle.Render(" actualizar  ") +
+		keyStyle.Render("Enter") + descStyle.Render(" informe  ") +
+		keyStyle.Render("o") + descStyle.Render(" abrir URL  ") +
+		keyStyle.Render("c") + descStyle.Render(" cambiar  ") +
+		keyStyle.Render("v") + descStyle.Render(" vista  ") +
+		keyStyle.Render("p") + descStyle.Render(" progreso  ") +
+		keyStyle.Render("q") + descStyle.Render(" salir")
 
 	gap := m.width - lipgloss.Width(keys) - lipgloss.Width(brand) - 2
 	if gap < 1 {
@@ -1057,7 +1075,7 @@ func (m PipelineModel) overlayStatusPicker(body string) string {
 		Bold(true)
 
 	var picker []string
-	picker = append(picker, padStyle.Render(borderStyle.Render("Change status:")))
+	picker = append(picker, padStyle.Render(borderStyle.Render("Cambiar estado:")))
 
 	for i, opt := range statusOptions {
 		style := lipgloss.NewStyle().Foreground(m.theme.Text).Width(pickerWidth)
@@ -1129,21 +1147,21 @@ func truncateRunes(s string, maxRunes int) string {
 func statusLabel(norm string) string {
 	switch norm {
 	case "interview":
-		return "Interview"
+		return "Entrevista"
 	case "offer":
-		return "Offer"
+		return "Oferta"
 	case "responded":
-		return "Responded"
+		return "Respondido"
 	case "applied":
-		return "Applied"
+		return "Aplicado"
 	case "evaluated":
-		return "Evaluated"
+		return "Evaluado"
 	case "skip":
-		return "Skip"
+		return "Ignorar"
 	case "rejected":
-		return "Rejected"
+		return "Rechazado"
 	case "discarded":
-		return "Discarded"
+		return "Descartado"
 	default:
 		return norm
 	}

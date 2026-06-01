@@ -1,31 +1,20 @@
 #!/usr/bin/env node
 /**
- * gemini-eval.mjs — Gemini-powered Job Offer Evaluator for career-ops
+ * opencode-eval.mjs — OpenCode Go-powered Job Offer Evaluator for career-ops
  *
- * A free-tier alternative to the Claude-based pipeline.
+ * A premium, subscription-tier alternative to the Gemini/Claude pipelines.
  * Reads evaluation logic from modes/oferta.md + modes/_shared.md,
  * reads the user's resume from cv.md, and evaluates a Job Description
- * passed as a command-line argument.
+ * using high-performance open-source models via OpenCode Go.
  *
  * Usage:
- *   node gemini-eval.mjs "Paste full JD text here"
- *   node gemini-eval.mjs --file ./jds/my-job.txt
+ *   node opencode-eval.mjs "Paste full JD text here"
+ *   node opencode-eval.mjs --file ./jds/my-job.txt
  *
  * Requires:
- *   GEMINI_API_KEY in .env (or environment variable)
+ *   OPENCODE_API_KEY in .env (or environment variable)
  *
- * Free-tier model: gemini-2.5-flash (generous quota, no billing required)
- *
- * Model deprecation reference (per Google AI for Developers, May 2026):
- *   - gemini-2.0-flash       deprecated 2026-03-31  (do not use)
- *   - gemini-2.0-flash-lite  deprecated 2026-03-31
- *   - gemini-2.5-flash       deprecated 2026-06-17  (current default)
- *   - gemini-2.5-flash-lite  deprecated 2026-07-22
- * Stable Gemini models follow a 12-month lifecycle from their release date.
- * Source: https://ai.google.dev/gemini-api/docs/models
- *
- * When the current default approaches its deprecation date, bump
- * `modelName` below and the `--model` examples accordingly.
+ * Premium models: qwen-3.7-max (default), deepseek-v4-pro, kimi-k2.6, glm-5.1
  */
 
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
@@ -43,19 +32,14 @@ try {
   // dotenv is optional — fall back to process.env if not installed
 }
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
 const ROOT = dirname(fileURLToPath(import.meta.url));
 
 const PATHS = {
-  // Primary evaluation logic lives in these two mode files
   shared:      join(ROOT, 'modes', '_shared.md'),
   oferta:      join(ROOT, 'modes', 'oferta.md'),
-  // Canonical skill path referenced in Issue #344
-  evaluate:    join(ROOT, '.claude', 'skills', 'career-ops', 'SKILL.md'),
   cv:          join(ROOT, 'cv.md'),
   profile:     join(ROOT, 'modes', '_profile.md'),
   profileYml:  join(ROOT, 'config', 'profile.yml'),
@@ -93,7 +77,6 @@ if (modesDir) {
   }
 }
 
-
 // ---------------------------------------------------------------------------
 // CLI argument parsing
 // ---------------------------------------------------------------------------
@@ -102,39 +85,39 @@ const args = process.argv.slice(2);
 if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
   console.log(`
 ╔══════════════════════════════════════════════════════════════════╗
-║           career-ops — Gemini Evaluator (free-tier)             ║
+║         career-ops — OpenCode Go Evaluator (premium-tier)         ║
 ╚══════════════════════════════════════════════════════════════════╝
 
-  Evaluate a job offer using Google Gemini instead of Claude.
+  Evaluate a job offer using OpenCode Go instead of Gemini or Claude.
 
   USAGE
-    node gemini-eval.mjs "<JD text>"
-    node gemini-eval.mjs --file ./jds/my-job.txt
-    node gemini-eval.mjs --model gemini-2.5-flash "<JD text>"
+    node opencode-eval.mjs "<JD text>"
+    node opencode-eval.mjs --file ./jds/my-job.txt
+    node opencode-eval.mjs --model qwen-3.7-max "<JD text>"
 
   OPTIONS
     --file <path>    Read JD from a file instead of inline text
-    --model <name>   Gemini model to use (default: gemini-2.5-flash)
+    --model <name>   OpenCode model to use (default: qwen-3.7-max)
     --no-save        Do not save report to reports/ directory
     --mock           Force mock/simulation mode (no API key required)
     --url <value>    Directly set the offer URL
     --help           Show this help
 
   SETUP
-    1. Get a free API key at https://aistudio.google.com/apikey
-    2. Add GEMINI_API_KEY=<your-key> to .env
-    3. Run: npm install   (installs @google/generative-ai + dotenv)
+    1. Get your API key from your OpenCode Go portal
+    2. Add OPENCODE_API_KEY=<your-key> to .env
+    3. Run: npm install   (installs dependencies)
 
   EXAMPLES
-    node gemini-eval.mjs "We are looking for a Senior AI Engineer..."
-    node gemini-eval.mjs --file ./jds/openai-swe.txt
+    node opencode-eval.mjs "We are looking for a Senior AI Engineer..."
+    node opencode-eval.mjs --file ./jds/openai-swe.txt
 `);
   process.exit(0);
 }
 
 // Parse flags
 let jdText = '';
-let modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+let modelName = process.env.OPENCODE_MODEL || 'qwen-3.7-max';
 let saveReport = true;
 let useMock = false;
 let url = 'pending';
@@ -196,104 +179,11 @@ function generateMockEvaluation(jdText) {
   company = company.replace(/\*\*/g, '').trim();
   role = role.replace(/\*\*/g, '').trim();
 
-  if (company.toUpperCase().includes('SYRSA')) {
-    return `## A) Role Summary
-
-- **Arquetipo detectado:** Marketing Automation / RevOps
-- **Dominio:** Enterprise CRM & Data Integration
-- **Función:** Gestión de datos, Automatizaciones, Estrategia CRM y Enlace IT-Negocio
-- **Seniority:** Responsable / Mid-Senior
-- **Remoto:** Híbrido / Presencial (Sevilla, España)
-- **Tamaño del equipo:** No especificado (+1000 profesionales en el grupo SYRSA)
-- **TL;DR:** Liderar la estrategia de datos y automatización multicanal utilizando Salesforce Marketing Cloud para un gran grupo de automoción líder en Andalucía.
-
-## B) Match with CV
-
-- **Gestión de Salesforce Marketing Cloud:**
-  - *Coincidencia:* Media. Ricardo tiene sólida experiencia con plataformas CRM líderes como Clientify y HubSpot. Aunque Salesforce es un entorno nuevo, su entendimiento conceptual de los flujos de trabajo relacionales es excelente.
-  - *Estrategia de Mitigación:* Destacar que ha programado su propio CRM multi-rol en ConectaYa, lo que demuestra un conocimiento de la lógica interna de datos muy superior al de un usuario estándar.
-- **Dominio de SQL:**
-  - *Coincidencia:* Excelente. Ricardo domina bases de datos relacionales complejas y consultas avanzadas de SQL (MySQL, PostgreSQL, Prisma ORM), lo que supera significativamente el perfil medio en marketing.
-- **Dominio de HTML/CSS:**
-  - *Coincidencia:* Excelente. Experiencia directa maquetando landing pages y templates responsivos para sus productos SaaS y campañas de marketing.
-- **Dominio de AMPscript:**
-  - *Coincidencia:* Media. Gap mitigable inmediatamente en 48 horas dada su alta competencia en desarrollo fullstack (Next.js/TypeScript).
-
-### Gaps y Estrategia de Mitigación:
-1. **Salesforce Marketing Cloud (SFMC):** Es deseable en la oferta, pero su capacidad para programar y mantener la arquitectura interna de un CRM (desarrollando ConectaYa y Metricasa) demuestra a los reclutadores que comprende los fundamentos a nivel de base de datos e integración de APIs.
-2. **AMPscript:** Siendo un lenguaje de marcado/scripting propio, el dominio fluido de JavaScript/TypeScript por parte de Ricardo hace que el aprendizaje de AMPscript sea extremadamente rápido y directo.
-
-## C) Level and Strategy
-
-1. **Nivel Detectado:** Mid-Senior (Responsable).
-2. **Estrategia "Vender Senior sin Mentir":** Posicionarse como un "Growth/MarTech Engineer". Su perfil diferencial radica en que no solo sabe estructurar flujos en un maquetador visual, sino que puede conectarse directamente con el equipo técnico de IT/desarrollo y hablar su mismo lenguaje, minimizando la fricción técnica.
-3. **Estrategia ante Downleveling:** Negociar dentro del rango salarial establecido (36.000€ - 40.000€) y acordar objetivos vinculados a la mejora del CPL (-50% logrado en Rootsfy) y automatización de captación, pidiendo una revisión formal a los 6 meses de contratación.
-
-## D) Comp and Demand
-
-- **Rango Salarial Estimado:** 36.000€ - 40.000€ brutos anuales (estimado/rango de mercado para esta posición en Sevilla).
-- **Nivel de Demanda:** Alto. Los profesionales híbridos con habilidades técnicas en SQL y automatizaciones de CRM tienen una demanda muy alta en el mercado español actual.
-- **Particularidades del Mercado Local:** SYRSA es un grupo de automoción consolidado en Andalucía, con más de 60 años de trayectoria. La contratación es estable y el sector de automoción en España suele regirse por convenios colectivos del metal o comercio de vehículos.
-
-## E) Customization Plan
-
-- **Cambios recomendados para el CV:**
-  1. *Título Principal:* Cambiar de "Marketing Automation | RevOps | AI Product Builder" a "Responsable CRM, Data & Salesforce Marketing Cloud".
-  2. *Perfil Profesional:* Resaltar la combinación de automatizaciones de negocio e interlocución con IT, enfatizando el dominio avanzado de SQL y HTML/CSS.
-  3. *Habilidades Clave:* Priorizar SQL, Estructuras de Datos, CRM (Clientify, HubSpot), HTML/CSS, y Salesforce MC (conceptos de arquitectura).
-  4. *Experiencia en Rootsfy:* Destacar el volumen de leads y la integración de embudos como un símil directo de la gestión de campañas masivas de SYRSA.
-  5. *Sección de Formación:* Resaltar el Máster en Big Data e Inteligencia Artificial realizado en Sevilla.
-- **Cambios recomendados para LinkedIn:**
-  1. *Titular:* Optimizar para incluir palabras clave técnicas de Salesforce y analítica de datos.
-  2. *Acerca de:* Enfocar en su perfil puente IT-Negocio y sus casos de éxito con métricas como el GTV de 8M€ y reducción de CPL.
-  3. *Sección de Aptitudes:* Añadir SQL avanzado, CRM e Integración de Datos.
-  4. *Destacados:* Incluir enlace a su portfolio ricardohuertas.es y SaaS propios.
-  5. *Proyectos:* Documentar de forma destacada Metricasa y ConectaYa detallando la arquitectura técnica.
-
-## F) Interview Plan
-
-### STAR+R Stories:
-1. **Situation:** En Rootsfy Inmobiliaria, la gestión de leads procedentes de múltiples portales (Idealista, Meta) era manual e ineficiente, elevando el tiempo de respuesta.
-   - **Task:** Automatizar la captación y cultivo del lead, conectando el CRM Clientify 0→1 para reducir el tiempo de respuesta.
-   - **Action:** Diseñé e implementé integraciones nativas mediante APIs y conectores webhook, optimizando el flujo de entrada de leads.
-   - **Result:** Se redujo el tiempo de respuesta inicial a menos de 20 minutos, procesando con éxito 259 de 309 oportunidades generadas (GTV > 8M€).
-   - **Reflection:** Comprendí que la inmediatez en el tratamiento del lead multiplica el ratio de conversión en frío, haciendo indispensable una arquitectura de automatización robusta.
-2. **Situation:** Desarrollo autónomo del CRM Metricasa.
-   - **Task:** Crear un sistema B2B con un motor de valoración automático robusto integrando datos oficiales.
-   - **Action:** Diseñé la estructura de base de datos relacional y consultas SQL para procesar registros del Catastro cubriendo 969 municipios.
-   - **Result:** Despliegue con éxito de una herramienta comercial estable en producción de alto rendimiento.
-   - **Reflection:** Programar un CRM desde sus cimientos me otorgó una visión integral de cómo se gestiona y segmenta la información de los leads, facilitando la comprensión inmediata de las Data Extensions en Salesforce.
-
-### Preguntas Difíciles:
-- **¿Por qué deberíamos contratarte si no vienes de un entorno clásico de Salesforce?**
-  - *Respuesta:* "Porque a diferencia de la mayoría de perfiles de marketing que solo usan la interfaz visual, yo he diseñado e implementado bases de datos y CRMs completos desde cero escribiendo SQL y maquetando HTML/CSS nativo. Mi perfil técnico me permite entender exactamente qué ocurre bajo el capó de Salesforce, lo que reduce mi curva de aprendizaje técnico a cuestión de días y me capacita para comunicarme directamente con sus equipos de desarrollo."
-
-## G) Posting Legitimacy
-
-- **Valoración:** Alta Confianza (High Confidence)
-- **Señales observadas:**
-  - *Frescura:* Vacante muy activa y detallada específicamente para Sevilla.
-  - *Especificidad:* Nivel técnico alto requerido en la descripción (AMPscript, SQL, HTML/CSS), lo cual valida la necesidad técnica real del puesto.
-  - *Reputación de la Empresa:* SYRSA es el grupo de automoción líder en Andalucía, garantizando un puesto sólido y estable.
-
-## Keywords extraídos para ATS
-
-Salesforce Marketing Cloud, CRM, SQL, AMPscript, HTML, Qlik Sense, Data Extensions, Journeys, Automatización, Sevilla, Automoción, RevOps, Segmentación de Audiencias, Maquetación, Data-driven, KPIs
-
----SCORE_SUMMARY---
-COMPANY: SYRSA
-ROLE: Responsable CRM, Data & Salesforce Marketing Cloud
-SCORE: 4.2
-ARCHETYPE: Marketing Automation / RevOps
-LEGITIMACY: High Confidence
----END_SUMMARY---`;
-  }
-
   return `## A) Role Summary
 
 - **Arquetipo detectado:** Marketing Automation / RevOps
 - **Dominio:** Enterprise CRM & Data Integration
-- **Función:** Automatizaciones y Estrategia CRM
+- **Función:** Automatizaciones y Estrategia CRM (OpenCode Go)
 - **Seniority:** Mid-Senior
 - **Remoto:** Híbrido
 - **Tamaño del equipo:** No especificado
@@ -309,7 +199,7 @@ LEGITIMACY: High Confidence
 ## C) Level and Strategy
 
 1. **Nivel Detectado:** Mid-Senior.
-2. **Estrategia "Vender Senior sin Mentir":** Posicionarse como un "Growth/MarTech Engineer" que no solo arrastra bloques de journey builder sino que entiende a nivel de base de datos relacional y APIs relacionales la estructura de leads.
+2. **Estrategia "Vender Senior sin Mentir":** Posicionarse como un "Growth/MarTech Engineer" que no solo arrastra bloques de journey builder sino que entiende a nivel de base de datos relacional y APIs la estructura de leads.
 3. **Estrategia ante Downleveling:** Proponer objetivos medibles alineados con la reducción de CPL (-50% en Rootsfy) a cambio de revisiones salariales rápidas.
 
 ## D) Comp and Demand
@@ -343,7 +233,7 @@ CRM, SQL, HTML, Automatización, Marketing Automation, RevOps, Data-driven, KPIs
 ---SCORE_SUMMARY---
 COMPANY: ${company}
 ROLE: ${role}
-SCORE: 4.0
+SCORE: 4.1
 ARCHETYPE: Marketing Automation / RevOps
 LEGITIMACY: High Confidence
 ---END_SUMMARY---`;
@@ -352,14 +242,14 @@ LEGITIMACY: High Confidence
 // ---------------------------------------------------------------------------
 // Validate environment
 // ---------------------------------------------------------------------------
-const apiKey = process.env.GEMINI_API_KEY;
+const apiKey = process.env.OPENCODE_API_KEY;
 if (!apiKey && !useMock) {
   console.error(`
-❌  GEMINI_API_KEY not found.
+❌  OPENCODE_API_KEY not found.
 
-   1. Get a free key at https://aistudio.google.com/apikey
-   2. Add it to .env:   GEMINI_API_KEY=your_key_here
-   3. Or export it:     export GEMINI_API_KEY=your_key_here
+   1. Get your API key from your OpenCode Go portal
+   2. Add it to .env:   OPENCODE_API_KEY=your_key_here
+   3. Or export it:     export OPENCODE_API_KEY=your_key_here
 `);
   process.exit(1);
 }
@@ -390,7 +280,6 @@ let readdirSync;
 try {
   ({ readdirSync } = await import('fs'));
 } catch { /* already imported above via named exports */ }
-// Use named import fallback
 if (!readdirSync) {
   readdirSync = (await import('fs')).readdirSync;
 }
@@ -407,13 +296,12 @@ const profileContent = readFile(PATHS.profile,     'modes/_profile.md');
 const profileYml     = readFile(PATHS.profileYml,  'config/profile.yml');
 
 // ---------------------------------------------------------------------------
-// Build the system prompt (mirrors the Claude skill router logic)
+// Build the system prompt
 // ---------------------------------------------------------------------------
 const systemPrompt = `You are career-ops, an AI-powered job search assistant.
 You evaluate job offers against the user's CV using a structured A-G scoring system.
 
 CRITICAL FORMATTING RULE: Do NOT use markdown tables anywhere in your output.
-Gemini models have a known bug that causes infinite loops when generating markdown tables.
 Instead of tables, represent all structured data using clean, well-formatted bulleted or numbered lists (e.g. for Blocks A, B, D, E, F, G).
 For example, for Block B, list each requirement and then provide your CV mapping as sub-bullets under it.
 
@@ -452,7 +340,7 @@ IMPORTANT OPERATING RULES FOR THIS CLI SESSION
    - For Block G (Legitimacy): analyze the JD text only; skip URL/page freshness checks.
    - Post-evaluation file saving is handled by the script, not by you.
 2. Generate Blocks A through G in full, in English, unless the JD is in another language.
-3. BE EXTREMELY BRIEF AND CONCISE. Do not write long paragraphs or extensive tables. Keep every section limited to 1-3 short bullet points. Avoid wordy explanations. Limit the Interview Plan (Block F) to exactly 2 very short STAR+R stories. This is critical to avoid output token limits. If you are too wordy, you will be cut off before generating the score summary!
+3. BE EXTREMELY BRIEF AND CONCISE. Do not write long paragraphs or extensive tables. Keep every section limited to 1-3 short bullet points. Avoid wordy explanations. Limit the Interview Plan (Block F) to exactly 2 very short STAR+R stories. This is critical to avoid output token limits.
 4. At the very end, output a machine-readable summary block in this exact format:
 
 ---SCORE_SUMMARY---
@@ -465,7 +353,7 @@ LEGITIMACY: <High Confidence | Proceed with Caution | Suspicious>
 `;
 
 // ---------------------------------------------------------------------------
-// Call Gemini API
+// Call OpenCode Go API
 // ---------------------------------------------------------------------------
 let evaluationText;
 let usedMockFlag = false;
@@ -475,38 +363,41 @@ if (useMock) {
   evaluationText = generateMockEvaluation(jdText);
   usedMockFlag = true;
 } else {
-  console.log(`🤖  Calling Gemini (${modelName})... this may take 30-60 seconds.\n`);
+  console.log(`🤖  Calling OpenCode Go API (${modelName})...\n`);
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      generationConfig: {
-        temperature: 0.4,      // deterministic enough for structured evaluation
-        maxOutputTokens: 8192, // full 7-block evaluation
+    const response = await fetch('https://opencode.ai/zen/go/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
       },
+      body: JSON.stringify({
+        model: modelName,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `JOB DESCRIPTION TO EVALUATE:\n\n${jdText}` }
+        ],
+        temperature: 0.4,
+      }),
     });
 
-    const result = await model.generateContent([
-      { text: systemPrompt },
-      { text: `\n\nJOB DESCRIPTION TO EVALUATE:\n\n${jdText}` },
-    ]);
-    evaluationText = result.response.text();
-  } catch (err) {
-    const sanitizedMsg = (err.message || '').split(apiKey).join('[REDACTED]');
-    console.error('❌  Gemini API error:', sanitizedMsg);
-    if (sanitizedMsg.includes('API_KEY')) {
-      console.error('    Check your GEMINI_API_KEY in .env');
-      process.exit(1);
-    } else if (sanitizedMsg.includes('quota') || sanitizedMsg.includes('rate')) {
-      console.warn('⚠️   API rate limit or quota exceeded. Falling back to dynamic mock evaluation...');
-      evaluationText = generateMockEvaluation(jdText);
-      usedMockFlag = true;
-    } else {
-      console.warn('⚠️   Gemini API call failed. Falling back to dynamic mock evaluation...');
-      evaluationText = generateMockEvaluation(jdText);
-      usedMockFlag = true;
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`HTTP Error ${response.status}: ${errText}`);
     }
+
+    const data = await response.json();
+    if (!data.choices || data.choices.length === 0 || !data.choices[0].message) {
+      throw new Error('Invalid response structure received from API');
+    }
+
+    evaluationText = data.choices[0].message.content;
+  } catch (err) {
+    console.error('❌  OpenCode Go API error:', err.message);
+    console.warn('⚠️   OpenCode Go API call failed. Falling back to dynamic mock evaluation...');
+    evaluationText = generateMockEvaluation(jdText);
+    usedMockFlag = true;
   }
 }
 
@@ -514,7 +405,7 @@ if (useMock) {
 // Display evaluation
 // ---------------------------------------------------------------------------
 console.log('\n' + '═'.repeat(66));
-console.log('  CAREER-OPS EVALUATION — powered by Google Gemini');
+console.log('  CAREER-OPS EVALUATION — powered by OpenCode Go');
 console.log('═'.repeat(66) + '\n');
 console.log(evaluationText);
 
@@ -566,7 +457,7 @@ if (saveReport) {
     const filename    = `${num}-${companySlug}-${today}.md`;
     const reportPath  = join(PATHS.reports, filename);
 
-    // Precise English header sequence as required by R4
+    // Exact English header sequence matching core standard
     const reportContent = `# Evaluation: ${company} — ${role}
 
 **Date:** ${today}
@@ -575,7 +466,7 @@ if (saveReport) {
 **Score:** ${score}/5
 **Legitimacy:** ${legitimacy}
 **PDF:** pending
-**Tool:** Gemini (${modelName}${usedMockFlag ? '-mock' : ''})
+**Tool:** OpenCode Go (${modelName}${usedMockFlag ? '-mock' : ''})
 
 ---
 
@@ -585,7 +476,7 @@ ${evaluationText.replace(/---SCORE_SUMMARY---[\s\S]*?---END_SUMMARY---/, '').tri
     writeFileSync(reportPath, reportContent, 'utf-8');
     console.log(`\n✅  Report saved: reports/${filename}`);
 
-    // Automatically save TSV addition
+    // Save TSV addition
     const tsvDir = join(ROOT, 'batch', 'tracker-additions');
     if (!existsSync(tsvDir)) {
       mkdirSync(tsvDir, { recursive: true });

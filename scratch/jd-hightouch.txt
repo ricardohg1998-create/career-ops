@@ -1,0 +1,43 @@
+Role: Product Marketing Manager, AdTech
+Company: Hightouch
+Location: Remote (North America)
+Salary: $145,000 - $170,000 USD per year
+
+About Hightouch:
+Hightouch is an Agentic Marketing Platform powered by the industry-leading Composable CDP. With complete brand context, customer data, and performance history in one place, every marketer finally has the power to build and ship end-to-end campaigns themselves. Teams move faster, stay on brand, and get AI marketing that actually works.
+Founded in 2019 and headquartered in San Francisco, Hightouch enables marketing teams to analyze performance, brainstorm ideas, and generate creative at a speed and quality that wasn't previously possible.
+Named a Leader in the 2026 Gartner® Magic Quadrant™ for Customer Data Platforms, Hightouch is trusted by leading enterprises like Domino's, Spotify, Aritzia, Cars.com, Ramp, and PetSmart.
+At Hightouch, our mission is to help our customers leverage data and AI to grow their businesses. The team is ambitious, impact-driven, efficient — and we believe humility, kindness, and compassion are essential to our success. If you're energized by velocity, obsessed with raising the bar, and want to build alongside people who care deeply about each other and our customers, we'd love to meet you.
+
+About the Role:
+Are you excited about redefining how brands plan, activate, and measure media in a world powered by data and AI? Do you love translating complex adtech and data concepts into clear, compelling stories for advertisers, agencies, and publishers?
+We’re looking for a Senior Product Marketing Manager, AdTech to own the go-to-market strategy for Hightouch’s adtech solutions across our Composable CDP, Match Booster, and Agentic Advertising Studio product lines. In this role, you’ll be the connective tissue between our product, marketing, and sales teams and the broader adtech ecosystem, including executive leadership, adtech & martech teams, agencies, and media partners.
+You’ll define positioning and messaging, develop thought leadership, launch campaigns, build sales enablement, and champion the voice of media buyers and media sellers across the company. If you’re a marketer who speaks the language of audiences, conversions, ROAS, and incrementality, and you’re energized by data and AI, this role is for you.
+
+What You’ll Do:
+- Own the end-to-end go-to-market strategy and execution for Hightouch’s AdTech products, integrations, and industry solutions.
+- Conduct customer, partner, and market research to identify unmet needs, quantify opportunities, and sharpen how our products win versus alternatives.
+- Develop compelling competitive and category narratives around topics like signal loss, identity and audiences, measurement, and AI-driven media optimization.
+- Create and refine differentiated positioning and messaging for key media buyer and media seller personas (e.g., advertising, product, and data teams).
+- Translate complex technical capabilities (identity resolution, onboarding, clean rooms, conversion APIs, etc.) into clear, outcome-focused value propositions for prospects, customers, and internal teams.
+- Build and maintain simple, repeatable messaging frameworks and battlecards that help Sales and partners win AdTech- and media-led deals.
+- Create, maintain, and continually improve core GTM assets that bring our positioning to life, including website messaging, decks, and sales enablement materials.
+- Drive creation of thought leadership and growth content, including case studies, product announcements, op-eds, and blog posts that showcase how Hightouch improves media performance and drives advertising revenue.
+- Partner closely with Growth Marketing and Sales to develop and execute account-based programs that generate new pipeline and expand existing customers.
+- Externally evangelize Hightouch and our AdTech story at field events, customer briefings, partner enablement sessions, and webinars.
+
+What We’re Looking For:
+- Experience in advertising or adtech: 5+ years leading advertising go-to-market or working as a paid media practitioner (as a media buyer or seller).
+- Product marketing or solutions ownership: 3+ years owning product marketing, solutions, or sales enablement for an AdTech offering (e.g., SaaS platform, agency solution, or enterprise-owned media solution).
+- Enterprise B2B background: Experience marketing, selling, or solutioning for enterprise companies, ideally focused on marketing, advertising, or data teams.
+- Deep media & AdTech subject-matter expertise: Strong understanding of modern media channels, data strategies, and technology across paid social, search, programmatic, CTV/OTT, retail media, and/or measurement. Fluency talking about pixels, audiences, conversions, identity, clean rooms, attribution, lift, and optimization strategies with both marketers and technical stakeholders.
+- Proven go-to-market execution: Demonstrated track record driving go-to-market for technical products or solutions, including positioning, launch planning, content and asset creation, and cross-functional execution.
+- Market and competitive insight: Experience researching customer needs and market dynamics in advertising and adtech, and using those insights to sharpen positioning and prioritize opportunities.
+- Communication & storytelling: Excellent written and verbal communication with both technical and non-technical executive stakeholders. Ability to synthesize complex concepts into clear, concise narratives and assets (slides, one-pagers, talk tracks) that help Sales and partners sell.
+- Cross-functional leadership: Comfortable driving alignment across Product, Sales, Marketing, and Partnerships, influencing without authority, and keeping projects moving in a fast-paced environment.
+
+Bonus If You Have:
+- Direct experience running paid media campaigns or media sales teams.
+- Experience with identity, data clean rooms, or measurement and analytics (MMM, MTA, incrementality testing, or experimentation frameworks for media).
+- Previous experience in a high-growth startup where you’ve worn multiple hats and helped build GTM programs from 0 → 1.
+- Familiarity with adjacent tools such as CDPs, data onboarding platforms, analytics tools, and data warehouses and lakehouses.

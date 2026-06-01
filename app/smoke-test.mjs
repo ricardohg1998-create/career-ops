@@ -30,11 +30,26 @@ async function assertOk(path, check) {
   console.log(`ok ${path}`);
 }
 
+async function assertPost(path, body, check) {
+  const res = await fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${path} returned ${res.status}`);
+  const data = await res.json();
+  if (check && !check(data)) throw new Error(`${path} returned unexpected payload`);
+  console.log(`ok ${path}`);
+}
+
 try {
   await waitForServer();
   await assertOk('/api/health', data => typeof data.ok === 'boolean');
   await assertOk('/api/applications', data => Array.isArray(data.applications) && data.metrics);
   await assertOk('/api/pipeline', data => Array.isArray(data.entries));
+  await assertOk('/api/reports', data => Array.isArray(data.reports));
+  await assertOk('/api/jobs', data => Array.isArray(data.jobs));
+  await assertPost('/api/learning/proposal', { company: 'Example', role: 'Role', decision: 'skip' }, data => data.ok && data.proposal?.content);
   await assertOk('/api/followups', data => 'ok' in data);
   await assertOk('/api/patterns', data => 'ok' in data);
 } finally {

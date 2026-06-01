@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Career-Ops Centro de Mando</title>
+    <title>Career-Ops Command Center</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -13,29 +13,26 @@
           <span class="brand-mark">CO</span>
           <div>
             <strong>Career-Ops</strong>
-            <small>centro de mando visual</small>
+            <small>Visual Command Center</small>
           </div>
         </div>
-        <nav class="nav" aria-label="Primary">
-          <button class="nav-item active" data-view="home">⌂ Inicio</button>
-          <button class="nav-item" data-view="applications">▦ Seguimiento</button>
-          <button class="nav-item" data-view="pipeline">☑ Pipeline</button>
-          <button class="nav-item" data-view="evaluate">◇ Evaluar</button>
-          <button class="nav-item" data-view="scan">↻ Escanear</button>
-          <button class="nav-item" data-view="profile">✎ Perfil</button>
-          <button class="nav-item" data-view="reports">▤ Informes</button>
-          <button class="nav-item" data-view="insights">◌ Análisis</button>
+        <nav class="nav" aria-label="Principal">
+          <button class="nav-item active" data-view="home"><span>⌂</span> Inicio</button>
+          <button class="nav-item" data-view="inbox"><span>☑</span> Inbox</button>
+          <button class="nav-item" data-view="evaluate"><span>◇</span> Evaluar</button>
+          <button class="nav-item" data-view="tracker"><span>▦</span> Tracker</button>
+          <button class="nav-item" data-view="lab"><span>◌</span> Lab</button>
         </nav>
         <div class="sidebar-foot">
           <span id="health-dot" class="dot"></span>
-          <span id="health-label">Revisando configuración</span>
+          <span id="health-label">Revisando setup</span>
         </div>
       </aside>
 
       <main class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">App local · revisión humana siempre</p>
+            <p class="eyebrow">Local app · decision humana siempre</p>
             <h1 id="view-title">Inicio</h1>
           </div>
           <div class="toolbar">
@@ -44,137 +41,161 @@
           </div>
         </header>
 
-        <section id="view-home" class="view active">
-          <div class="metric-grid" id="metrics"></div>
-          <div class="split">
-            <section class="panel">
-              <div class="panel-head">
-                <h2>Próximas acciones</h2>
-                <button class="primary-btn" data-jump="evaluate">Evaluar oferta</button>
+        <div class="command-layout">
+          <section class="content-stack">
+            <section id="view-home" class="view active">
+              <div class="metric-grid" id="metrics"></div>
+              <div class="band">
+                <div class="panel-head">
+                  <h2>Prioridades</h2>
+                  <button class="primary-btn" data-jump="evaluate">Evaluar oferta</button>
+                </div>
+                <div id="priority-list" class="decision-list"></div>
               </div>
-              <div id="next-actions" class="action-list"></div>
-            </section>
-            <section class="panel">
-              <div class="panel-head">
-                <h2>Estado del setup</h2>
-                <button class="ghost-btn" data-jump="profile">Editar perfil</button>
+              <div class="two-col">
+                <section class="panel">
+                  <div class="panel-head"><h2>Seguimientos</h2><button class="ghost-btn" data-jump="lab">Ver Lab</button></div>
+                  <div id="followup-summary" class="compact-feed"></div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><h2>Setup</h2><button class="ghost-btn" data-jump="lab">Editar</button></div>
+                  <div id="health-list" class="check-list"></div>
+                </section>
               </div>
-              <div id="health-list" class="check-list"></div>
             </section>
-          </div>
-        </section>
 
-        <section id="view-applications" class="view">
-          <div class="control-row">
-            <input id="application-search" type="search" placeholder="Buscar empresa, rol o notas">
-            <select id="status-filter"></select>
-            <select id="score-filter">
-              <option value="all">Todos los scores</option>
-              <option value="top">Top ≥4.0</option>
-              <option value="low">Menos de 4.0</option>
-            </select>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr><th>#</th><th>Empresa</th><th>Rol</th><th>Score</th><th>Estado</th><th>Archivos</th><th>Notas</th></tr>
-              </thead>
-              <tbody id="applications-table"></tbody>
-            </table>
-          </div>
-        </section>
+            <section id="view-inbox" class="view">
+              <div class="control-row">
+                <input id="pipeline-search" type="search" placeholder="Buscar empresa, rol o URL">
+                <select id="pipeline-filter">
+                  <option value="pending">Pendientes</option>
+                  <option value="all">Todas</option>
+                  <option value="duplicates">Duplicadas</option>
+                  <option value="evaluated">Ya evaluadas</option>
+                </select>
+                <button id="scan-open-btn" class="ghost-btn">Escanear</button>
+              </div>
+              <form id="pipeline-form" class="inline-form">
+                <input name="url" required placeholder="URL de la oferta">
+                <input name="company" placeholder="Empresa">
+                <input name="role" placeholder="Rol">
+                <button class="primary-btn">Añadir</button>
+              </form>
+              <div id="pipeline-list" class="inbox-list"></div>
+              <section id="scan-panel" class="panel hidden">
+                <div class="panel-head"><h2>Escaner de portales</h2><span class="muted">Escribe en pipeline salvo simulacion.</span></div>
+                <form id="scan-form" class="inline-form">
+                  <input name="company" placeholder="Filtro por empresa">
+                  <label class="check"><input name="dryRun" type="checkbox" checked> Simulacion</label>
+                  <label class="check"><input name="verify" type="checkbox"> Verificar activas</label>
+                  <button class="primary-btn">Escanear</button>
+                </form>
+                <pre id="scan-log" class="job-log"></pre>
+              </section>
+            </section>
 
-        <section id="view-pipeline" class="view">
-          <form id="pipeline-form" class="inline-form">
-            <input name="url" required placeholder="URL de la oferta">
-            <input name="company" placeholder="Empresa">
-            <input name="role" placeholder="Rol">
-            <button class="primary-btn">Añadir URL</button>
-          </form>
-          <div id="pipeline-list" class="queue-list"></div>
-        </section>
+            <section id="view-evaluate" class="view">
+              <section class="panel">
+                <div class="panel-head">
+                  <h2>Evaluar URL o JD</h2>
+                  <span class="muted">Genera JD, informe y tracker. Nunca aplica por ti.</span>
+                </div>
+                <form id="evaluate-form" class="stack-form">
+                  <div class="form-grid">
+                    <input name="url" type="url" placeholder="URL de la oferta">
+                    <input name="title" placeholder="Etiqueta corta">
+                    <select name="preset">
+                      <option value="">Preset por defecto</option>
+                      <option value="fast">Cribado rapido</option>
+                      <option value="review">Revision critica</option>
+                      <option value="long">Contexto largo</option>
+                    </select>
+                  </div>
+                  <textarea name="jdText" rows="12" placeholder="Pega aqui la descripcion de la oferta si no usas URL"></textarea>
+                  <button class="primary-btn">Evaluar oferta</button>
+                </form>
+              </section>
+              <section class="panel">
+                <div class="panel-head"><h2>Registro</h2><span id="evaluate-status" class="muted"></span></div>
+                <pre id="evaluate-log" class="job-log"></pre>
+              </section>
+              <section class="report-shell">
+                <div class="control-row">
+                  <select id="report-picker"></select>
+                  <button id="generate-report-pdf" class="primary-btn">Generar PDF</button>
+                </div>
+                <article id="report-viewer" class="report-viewer"></article>
+                <pre id="report-log" class="job-log small"></pre>
+              </section>
+            </section>
 
-        <section id="view-evaluate" class="view">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Evaluar una oferta</h2>
-              <span class="muted">Crea un archivo JD, informe y entrada de tracker. Nunca aplica por ti.</span>
-            </div>
-            <form id="evaluate-form" class="stack-form">
-              <input name="url" type="url" placeholder="URL de la oferta (opcional si pegas el JD)">
-              <input name="title" placeholder="Etiqueta corta para guardar el JD">
-              <select name="preset">
-                <option value="">Preset de modelo por defecto</option>
-                <option value="fast">Cribado rápido</option>
-                <option value="review">Revisión crítica</option>
-                <option value="long">Contexto largo</option>
-              </select>
-              <textarea name="jdText" rows="14" placeholder="Pega aquí la descripción de la oferta, o indica una URL arriba"></textarea>
-              <button class="primary-btn">Evaluar oferta</button>
-            </form>
-          </div>
-          <section class="panel">
-            <h2>Registro de evaluación</h2>
-            <pre id="evaluate-log" class="job-log"></pre>
+            <section id="view-tracker" class="view">
+              <div class="control-row">
+                <input id="application-search" type="search" placeholder="Buscar empresa, rol o notas">
+                <select id="status-filter"></select>
+                <select id="score-filter">
+                  <option value="all">Todos los scores</option>
+                  <option value="top">Top >=4.0</option>
+                  <option value="low">Menos de 4.0</option>
+                </select>
+              </div>
+              <div id="applications-table" class="tracker-table"></div>
+            </section>
+
+            <section id="view-lab" class="view">
+              <div class="tabs">
+                <button class="tab active" data-lab="insights">Insights</button>
+                <button class="tab" data-lab="profile">profile.yml</button>
+                <button class="tab" data-lab="cv">cv.md</button>
+                <button class="tab" data-lab="profileMode">_profile.md</button>
+                <button class="tab" data-lab="articleDigest">article-digest.md</button>
+              </div>
+              <section id="lab-insights" class="lab-pane active">
+                <div class="two-col">
+                  <section class="panel">
+                    <div class="panel-head"><h2>Seguimientos</h2><button id="load-followups" class="ghost-btn">Recargar</button></div>
+                    <pre id="followups-json" class="json-box"></pre>
+                  </section>
+                  <section class="panel">
+                    <div class="panel-head"><h2>Patrones</h2><button id="load-patterns" class="ghost-btn">Recargar</button></div>
+                    <pre id="patterns-json" class="json-box"></pre>
+                  </section>
+                </div>
+              </section>
+              <section id="lab-editor" class="lab-pane">
+                <textarea id="editor" class="editor" spellcheck="false"></textarea>
+                <div class="editor-actions">
+                  <button id="save-editor" class="primary-btn">Guardar cambios</button>
+                  <span id="editor-status" class="muted"></span>
+                </div>
+              </section>
+            </section>
           </section>
-        </section>
 
-        <section id="view-scan" class="view">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Escanear portales</h2>
-              <span class="muted">Usa los providers existentes y escribe en el pipeline salvo que actives simulación.</span>
-            </div>
-            <form id="scan-form" class="inline-form scan-form">
-              <input name="company" placeholder="Filtro por empresa (opcional)">
-              <label><input name="dryRun" type="checkbox" checked> Simulación</label>
-              <label><input name="verify" type="checkbox"> Verificar ofertas activas</label>
-              <button class="primary-btn">Escanear ofertas</button>
-            </form>
-          </div>
-          <section class="panel">
-            <h2>Registro de escaneo</h2>
-            <pre id="scan-log" class="job-log"></pre>
-          </section>
-        </section>
-
-        <section id="view-profile" class="view">
-          <div class="tabs">
-            <button class="tab active" data-editor="profile">profile.yml</button>
-            <button class="tab" data-editor="cv">cv.md</button>
-            <button class="tab" data-editor="profileMode">_profile.md</button>
-            <button class="tab" data-editor="articleDigest">article-digest.md</button>
-          </div>
-          <textarea id="editor" class="editor" spellcheck="false"></textarea>
-          <div class="editor-actions">
-            <button id="save-editor" class="primary-btn">Guardar cambios</button>
-            <span id="editor-status" class="muted"></span>
-          </div>
-        </section>
-
-        <section id="view-reports" class="view">
-          <div class="control-row">
-            <select id="report-picker"></select>
-            <button id="generate-report-pdf" class="primary-btn">Generar PDF del informe</button>
-          </div>
-          <article id="report-viewer" class="report-viewer"></article>
-          <pre id="report-log" class="job-log"></pre>
-        </section>
-
-        <section id="view-insights" class="view">
-          <div class="split">
-            <section class="panel">
-              <div class="panel-head"><h2>Seguimientos</h2><button id="load-followups" class="ghost-btn">Recargar</button></div>
-              <pre id="followups-json" class="json-box"></pre>
-            </section>
-            <section class="panel">
-              <div class="panel-head"><h2>Patrones</h2><button id="load-patterns" class="ghost-btn">Recargar</button></div>
-              <pre id="patterns-json" class="json-box"></pre>
-            </section>
-          </div>
-        </section>
+          <aside class="detail-panel" aria-live="polite">
+            <div id="detail-panel"></div>
+          </aside>
+        </div>
       </main>
     </div>
+
+    <dialog id="learning-dialog">
+      <form method="dialog" class="dialog-body">
+        <h2>Guardar aprendizaje</h2>
+        <p class="muted">Revisa antes de escribir. Solo se guardara en archivos de usuario.</p>
+        <select id="learning-destination">
+          <option value="profileMode">modes/_profile.md</option>
+          <option value="articleDigest">article-digest.md</option>
+          <option value="profile">config/profile.yml</option>
+        </select>
+        <textarea id="learning-content" rows="10"></textarea>
+        <div class="dialog-actions">
+          <button value="cancel" class="ghost-btn">Cancelar</button>
+          <button id="confirm-learning" value="default" class="primary-btn">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="/app.js" type="module"></script>
   </body>
 </html>

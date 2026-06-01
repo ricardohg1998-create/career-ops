@@ -138,6 +138,18 @@ function parseApplications() {
   return rows;
 }
 
+function getSourceHost(value = '') {
+  try {
+    return new URL(value).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function reportIdFromPath(reportPath = '') {
+  return path.basename(reportPath, '.md');
+}
+
 function findPdfForReport(reportPath, number) {
   if (!existsSync(path.join(ROOT, 'output'))) return '';
   const slug = reportPath ? path.basename(reportPath, '.md') : String(number).padStart(3, '0');
@@ -149,11 +161,81 @@ function findPdfForReport(reportPath, number) {
 function parseReportMeta(reportPath) {
   const safe = resolveAllowedPath(reportPath, ['reports']);
   if (!safe || !existsSync(safe)) return {};
-  const head = readText(safe).slice(0, 4000);
+  const text = readText(safe);
+  const head = text.slice(0, 5000);
+  const title = head.match(/^#\s+(.+)$/m)?.[1]?.trim() || reportIdFromPath(reportPath);
+  const companyRole = title.match(/^Evaluation:\s*(.+?)\s+[—-]\s+(.+)$/i);
+  const scoreRaw = head.match(/^\*\*Score:\*\*\s*(.+)$/m)?.[1]?.trim() || '';
+  const score = scoreRaw.match(/(\d+(?:\.\d+)?)\/5/)?.[1];
   return {
+    id: reportIdFromPath(reportPath),
+    path: reportPath,
+    title,
+    company: companyRole?.[1]?.trim() || '',
+    role: companyRole?.[2]?.trim() || '',
+    date: head.match(/^\*\*Date:\*\*\s*(.+)$/m)?.[1]?.trim() || '',
+    archetype: head.match(/^\*\*Archetype:\*\*\s*(.+)$/m)?.[1]?.trim() || '',
+    scoreRaw,
+    score: score ? Number(score) : null,
     url: head.match(/^\*\*URL:\*\*\s*(https?:\/\/\S+)/m)?.[1] || '',
     legitimacy: head.match(/^\*\*Legitimacy:\*\*\s*(.+)$/m)?.[1]?.trim() || '',
-    tldr: head.match(/\*\*TL;DR(?::|\*\*\s*\|)\s*(.+)$/im)?.[1]?.trim() || '',
+    pdf: head.match(/^\*\*PDF:\*\*\s*(.+)$/m)?.[1]?.trim() || '',
+    tool: head.match(/^\*\*Tool:\*\*\s*(.+)$/m)?.[1]?.trim() || '',
+    tldr: extractTldr(text),
+  };
+}
+
+function extractTldr(text = '') {
+  const bold = text.match(/\*\*TL;DR(?::|\*\*\s*\|)\s*(.+)$/im)?.[1]?.trim();
+  if (bold) return bold.replace(/\s+\|.*$/, '').trim();
+  const table = text.match(/\|\s*(?:\*\*)?TL;DR(?:\*\*)?\s*\|\s*(.+?)\s*\|/i)?.[1]?.trim();
+  if (table) return table;
+  const bullet = text.match(/^\s*[-*]\s+\*\*TL;DR:\*\*\s*(.+)$/im)?.[1]?.trim();
+  return bullet || '';
+}
+
+function parseReportSections(markdown = '') {
+  const hits = REPORT_SECTION_LABELS
+    .map(([key, pattern]) => {
+      const match = pattern.exec(markdown);
+      return match ? { key, index: match.index } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.index - b.index);
+  const sections = {};
+  for (let i = 0; i < hits.length; i++) {
+    const start = hits[i].index;
+    const end = hits[i + 1]?.index ?? markdown.length;
+    sections[hits[i].key] = markdown.slice(start, end).trim();
+  }
+  return sections;
+}
+
+function listReports() {
+  const reportsDir = path.join(ROOT, 'reports');
+  if (!existsSync(reportsDir)) return [];
+  return readdirSync(reportsDir)
+    .filter(file => file.toLowerCase().endsWith('.md'))
+    .map(file => {
+      const rel = `reports/${file}`;
+      const stat = statSync(path.join(reportsDir, file));
+      return { ...parseReportMeta(rel), path: rel, id: reportIdFromPath(rel), updatedAt: stat.mtime.toISOString() };
+    })
+    .sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+}
+
+function readReportById(id) {
+  const clean = slugify(id);
+  const report = listReports().find(item => item.id === clean);
+  if (!report) return null;
+  const full = resolveAllowedPath(report.path, ['reports']);
+  if (!full || !existsSync(full)) return null;
+  const markdown = readText(full);
+  return {
+    ...report,
+    markdown,
+    sections: parseReportSections(markdown),
+    pdfPath: findPdfForReport(report.path, Number(report.id.match(/^\d+/)?.[0] || 0)),
   };
 }
 
@@ -237,10 +319,39 @@ function parsePipeline() {
       url: parts[0] || '',
       company: parts[1] || '',
       role: parts.slice(2).join(' | ') || '',
+      sourceHost: getSourceHost(parts[0] || ''),
       raw,
     });
   }
-  return { content, entries };
+  return { content, entries: enrichPipelineEntries(entries) };
+}
+
+function normalizeKey(value = '') {
+  return String(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function enrichPipelineEntries(entries) {
+  const apps = parseApplications();
+  const seenUrls = new Map();
+  const appKeys = new Set(apps.map(app => `${normalizeKey(app.company)}|${normalizeKey(app.role)}`));
+  const appUrls = new Set(apps.map(app => app.jobUrl).filter(Boolean));
+  return entries.map(entry => {
+    const urlKey = normalizeKey(entry.url);
+    const pairKey = `${normalizeKey(entry.company)}|${normalizeKey(entry.role)}`;
+    const duplicateCandidate = Boolean(urlKey && seenUrls.has(urlKey));
+    if (urlKey && !seenUrls.has(urlKey)) seenUrls.set(urlKey, entry.id);
+    return {
+      ...entry,
+      sourceHost: entry.sourceHost || getSourceHost(entry.url),
+      duplicateCandidate,
+      evaluatedCandidate: Boolean(appUrls.has(entry.url) || appKeys.has(pairKey)),
+    };
+  });
 }
 
 function writePipelineEntries(entries) {
@@ -334,6 +445,85 @@ async function extractJobText(url) {
   }
 }
 
+async function checkLiveness(url) {
+  const { chromium } = await import('playwright');
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => null);
+    await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
+    const bodyText = await page.locator('body').innerText({ timeout: 15000 }).catch(() => '');
+    const applyControls = await page.locator('a,button,input[type="submit"]').evaluateAll(nodes =>
+      nodes.map(node => node.innerText || node.value || node.getAttribute('aria-label') || '').filter(Boolean)
+    ).catch(() => []);
+    const classified = classifyLiveness({
+      status: response?.status?.() || 0,
+      finalUrl: page.url(),
+      bodyText,
+      applyControls,
+    });
+    return {
+      ok: true,
+      url,
+      finalUrl: page.url(),
+      status: response?.status?.() || 0,
+      active: classified.result === 'active',
+      result: classified.result,
+      code: classified.code,
+      reason: classified.reason,
+    };
+  } catch (err) {
+    return { ok: false, url, result: 'unconfirmed', code: 'playwright_error', reason: err.message };
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+function buildLearningProposal(body) {
+  const company = String(body.company || 'esta empresa').trim();
+  const role = String(body.role || 'este rol').trim();
+  const signal = String(body.signal || body.decision || 'decision del usuario').trim();
+  const reason = String(body.reason || body.notes || '').trim();
+  const score = String(body.score || '').trim();
+  const recommendation = [
+    `- Decision observada: ${signal} en ${company} / ${role}${score ? ` (score ${score})` : ''}.`,
+    reason ? `- Motivo del usuario: ${reason}` : '- Motivo del usuario: pendiente de concretar.',
+    '- Ajuste sugerido: reforzar esta preferencia en futuras evaluaciones y filtros de pipeline.',
+  ].join('\n');
+  return {
+    destination: 'profileMode',
+    title: `Learning: ${company} - ${role}`,
+    content: `\n\n## Learning - ${new Date().toISOString().slice(0, 10)} - ${company} - ${role}\n\n${recommendation}\n`,
+  };
+}
+
+function applyLearning(body) {
+  const destination = String(body.destination || '').trim();
+  const content = String(body.content || '').trim();
+  if (!content) throw Object.assign(new Error('Hace falta contenido de aprendizaje.'), { status: 400 });
+  if (!['profileMode', 'articleDigest', 'profile'].includes(destination)) {
+    throw Object.assign(new Error('Destino de aprendizaje no permitido.'), { status: 400 });
+  }
+
+  if (destination === 'profileMode') {
+    writeFileSync(userFiles.profileMode, `${readText(userFiles.profileMode).replace(/\s*$/, '')}\n\n${content}\n`, 'utf-8');
+    return { ok: true, destination: 'modes/_profile.md' };
+  }
+  if (destination === 'articleDigest') {
+    writeFileSync(userFiles.articleDigest, `${readText(userFiles.articleDigest).replace(/\s*$/, '')}\n\n${content}\n`, 'utf-8');
+    return { ok: true, destination: 'article-digest.md' };
+  }
+
+  const parsed = yaml.load(readText(userFiles.profile, '{}')) || {};
+  parsed.learning_notes = Array.isArray(parsed.learning_notes) ? parsed.learning_notes : [];
+  parsed.learning_notes.push({
+    date: new Date().toISOString().slice(0, 10),
+    note: content,
+  });
+  writeFileSync(userFiles.profile, yaml.dump(parsed, { lineWidth: 120 }), 'utf-8');
+  return { ok: true, destination: 'config/profile.yml' };
+}
+
 function slugify(value) {
   return String(value || 'job')
     .toLowerCase()
@@ -372,6 +562,17 @@ async function handleApi(req, res, url) {
       metrics: computeMetrics(applications),
       states: loadStates().states.map(s => ({ id: s.id, label: s.label, description: s.description })),
     });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/reports') {
+    return json(res, 200, { reports: listReports() });
+  }
+
+  const reportMatch = url.pathname.match(/^\/api\/reports\/([^/]+)$/);
+  if (req.method === 'GET' && reportMatch) {
+    const report = readReportById(decodeURIComponent(reportMatch[1]));
+    if (!report) return json(res, 404, { error: 'Informe no encontrado' });
+    return json(res, 200, { report });
   }
 
   const statusMatch = url.pathname.match(/^\/api\/applications\/(\d+)\/status$/);
@@ -454,6 +655,13 @@ async function handleApi(req, res, url) {
     return json(res, 202, { jobId: job.id });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/jobs/liveness') {
+    const body = await parseJsonBody(req);
+    const target = String(body.url || '').trim();
+    if (!/^https?:\/\//i.test(target)) return json(res, 400, { error: 'Hace falta una URL http(s) valida.' });
+    return json(res, 200, await checkLiveness(target));
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/jobs/evaluate') {
     const body = await parseJsonBody(req);
     let jdText = String(body.jdText || '').trim();
@@ -522,6 +730,16 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/followups') {
     const result = await runScriptJson(['followup-cadence.mjs']);
     return json(res, result.data ? 200 : 500, result);
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/learning/proposal') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, { ok: true, proposal: buildLearningProposal(body) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/learning/apply') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, applyLearning(body));
   }
 
   if (req.method === 'GET' && url.pathname === '/api/files') {

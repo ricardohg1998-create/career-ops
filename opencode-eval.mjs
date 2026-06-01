@@ -10,11 +10,12 @@
  * Usage:
  *   node opencode-eval.mjs "Paste full JD text here"
  *   node opencode-eval.mjs --file ./jds/my-job.txt
+ *   node opencode-eval.mjs --preset fast --file ./jds/my-job.txt
  *
  * Requires:
  *   OPENCODE_API_KEY in .env (or environment variable)
  *
- * Premium models: qwen-3.7-max (default), deepseek-v4-pro, kimi-k2.6, glm-5.1
+ * Premium models: deepseek-v4-pro (default), kimi-k2.6, glm-5.1, qwen3.6-plus
  */
 
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
@@ -46,6 +47,50 @@ const PATHS = {
   reports:     join(ROOT, 'reports'),
   tracker:     join(ROOT, 'data', 'applications.md'),
 };
+
+const MODEL_PRESETS = {
+  eval: {
+    model: 'deepseek-v4-pro',
+    use: 'Default job evaluations and final reports',
+  },
+  fast: {
+    model: 'deepseek-v4-flash',
+    use: 'High-volume screening, quick scans, and cheap triage',
+  },
+  batch: {
+    model: 'deepseek-v4-flash',
+    use: 'Batch evaluation first pass',
+  },
+  draft: {
+    model: 'kimi-k2.6',
+    use: 'CV tailoring, LinkedIn outreach, and human-sounding application copy',
+  },
+  review: {
+    model: 'glm-5.1',
+    use: 'Second-pass critique, red flags, and risk review',
+  },
+  long: {
+    model: 'mimo-v2.5-pro',
+    use: 'Long-context offers, large CV context, and dense supporting material',
+  },
+};
+
+const UNSUPPORTED_PRESETS = {
+  strategy: {
+    model: 'qwen3.7-max',
+    reason: 'Qwen3.7 Max uses the OpenCode Go messages endpoint; this evaluator currently uses chat/completions.',
+  },
+};
+
+function printPresetList() {
+  console.log('\n  MODEL PRESETS');
+  for (const [name, preset] of Object.entries(MODEL_PRESETS)) {
+    console.log(`    ${name.padEnd(8)} ${preset.model.padEnd(20)} ${preset.use}`);
+  }
+  for (const [name, preset] of Object.entries(UNSUPPORTED_PRESETS)) {
+    console.log(`    ${name.padEnd(8)} ${preset.model.padEnd(20)} ${preset.reason}`);
+  }
+}
 
 // Load and parse profile.yml to support language.modes_dir
 let modesDir = null;
@@ -93,11 +138,14 @@ if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
   USAGE
     node opencode-eval.mjs "<JD text>"
     node opencode-eval.mjs --file ./jds/my-job.txt
-    node opencode-eval.mjs --model qwen-3.7-max "<JD text>"
+    node opencode-eval.mjs --model deepseek-v4-pro "<JD text>"
+    node opencode-eval.mjs --preset fast --file ./jds/my-job.txt
 
   OPTIONS
     --file <path>    Read JD from a file instead of inline text
-    --model <name>   OpenCode model to use (default: qwen-3.7-max)
+    --model <name>   OpenCode model to use (default: deepseek-v4-pro)
+    --preset <name>  Use a model preset: eval, fast, batch, draft, review, long
+    --list-presets   Show recommended OpenCode Go model presets
     --no-save        Do not save report to reports/ directory
     --mock           Force mock/simulation mode (no API key required)
     --url <value>    Directly set the offer URL
@@ -111,13 +159,16 @@ if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
   EXAMPLES
     node opencode-eval.mjs "We are looking for a Senior AI Engineer..."
     node opencode-eval.mjs --file ./jds/openai-swe.txt
+    node opencode-eval.mjs --preset review --file ./jds/finalist.txt
 `);
+  printPresetList();
   process.exit(0);
 }
 
 // Parse flags
 let jdText = '';
-let modelName = process.env.OPENCODE_MODEL || 'qwen-3.7-max';
+let modelName = process.env.OPENCODE_MODEL || 'deepseek-v4-pro';
+let selectedPreset = process.env.OPENCODE_PRESET || '';
 let saveReport = true;
 let useMock = false;
 let url = 'pending';
@@ -133,6 +184,23 @@ for (let i = 0; i < args.length; i++) {
     url = `local:${filePath}`;
   } else if (args[i] === '--model' && args[i + 1]) {
     modelName = args[++i];
+    selectedPreset = '';
+  } else if (args[i] === '--preset' && args[i + 1]) {
+    selectedPreset = args[++i];
+    if (MODEL_PRESETS[selectedPreset]) {
+      modelName = MODEL_PRESETS[selectedPreset].model;
+    } else if (UNSUPPORTED_PRESETS[selectedPreset]) {
+      console.error(`❌  Preset "${selectedPreset}" maps to ${UNSUPPORTED_PRESETS[selectedPreset].model}, but it is not supported by opencode-eval.mjs yet.`);
+      console.error(`    ${UNSUPPORTED_PRESETS[selectedPreset].reason}`);
+      process.exit(1);
+    } else {
+      console.error(`❌  Unknown preset: ${selectedPreset}`);
+      printPresetList();
+      process.exit(1);
+    }
+  } else if (args[i] === '--list-presets') {
+    printPresetList();
+    process.exit(0);
   } else if (args[i] === '--no-save') {
     saveReport = false;
   } else if (args[i] === '--mock') {
@@ -147,6 +215,10 @@ for (let i = 0; i < args.length; i++) {
 if (!jdText) {
   console.error('❌  No Job Description provided. Run with --help for usage.');
   process.exit(1);
+}
+
+if (selectedPreset && MODEL_PRESETS[selectedPreset]) {
+  console.log(`🎛️   Using OpenCode preset "${selectedPreset}" → ${modelName}`);
 }
 
 // ---------------------------------------------------------------------------

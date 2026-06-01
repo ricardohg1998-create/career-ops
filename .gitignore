@@ -30,8 +30,9 @@ modes/_profile.md
 .update-dismissed
 .update-lock
 
-# Secrets (never commit — use .env.example as template)
+# Secrets (never commit)
 .env
+.env.example
 
 # Generated
 .resolved-prompt-*

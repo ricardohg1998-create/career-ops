@@ -92,6 +92,7 @@ npm run doctor                     # Validates all prerequisites
 # 3. Configure
 cp config/profile.example.yml config/profile.yml  # Edit with your details
 cp templates/portals.example.yml portals.yml       # Customize companies
+# Optional API evaluator: add OPENCODE_API_KEY to .env, then run npm run eval
 
 # 4. Add your CV
 # Create cv.md in the project root with your CV in markdown
@@ -112,6 +113,56 @@ claude   # Open Claude Code in this directory
 > **The system is designed to be customized by Claude itself.** Modes, archetypes, scoring weights, negotiation scripts -- just ask Claude to change them. It reads the same files it uses, so it knows exactly what to edit.
 
 See [docs/SETUP.md](docs/SETUP.md) for the full setup guide.
+
+## OpenCode Go API Evaluator
+
+This repository is configured to use OpenCode Go for standalone API-based evaluations.
+
+```bash
+# .env
+OPENCODE_API_KEY=your_opencode_api_key_here
+OPENCODE_MODEL=deepseek-v4-pro
+
+# Evaluate a job description
+npm run eval -- "We are looking for a Marketing Automation Specialist..."
+npm run eval -- --file ./jds/my-job.txt
+```
+
+`npm run eval`, `npm run api:eval`, and `npm run opencode:eval` all use `opencode-eval.mjs`.
+
+### Recommended OpenCode Go Presets
+
+```bash
+# Show the configured presets
+npm run eval:presets
+
+# Default, balanced evaluation
+npm run eval -- --file ./jds/my-job.txt
+
+# Cheap first-pass triage for many offers
+npm run eval:fast -- --file ./jds/my-job.txt
+npm run eval:batch -- --file ./jds/my-job.txt
+
+# More natural wording for CV/application copy
+npm run eval:draft -- --file ./jds/my-job.txt
+
+# Second-pass critique for finalist roles
+npm run eval:review -- --file ./jds/my-job.txt
+
+# Dense offers or large supporting context
+npm run eval:long -- --file ./jds/my-job.txt
+```
+
+| Use case | Preset | Model |
+|---|---|---|
+| Default job evaluations and final reports | `eval` | `deepseek-v4-pro` |
+| High-volume screening and quick scans | `fast` | `deepseek-v4-flash` |
+| Batch first pass | `batch` | `deepseek-v4-flash` |
+| CV tailoring, outreach, application copy | `draft` | `kimi-k2.6` |
+| Red flags and second-pass critique | `review` | `glm-5.1` |
+| Long-context evaluations | `long` | `mimo-v2.5-pro` |
+
+For complex planning, `qwen3.7-max` is recommended conceptually, but it uses OpenCode Go's `messages` endpoint. `opencode-eval.mjs` currently uses `chat/completions`, so the script intentionally does not expose it as a runnable preset yet.
 
 ## Gemini CLI Integration
 

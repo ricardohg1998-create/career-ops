@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.9.0](https://github.com/ricardohg1998-create/career-ops/compare/career-ops-v1.8.0...career-ops-v1.9.0) (2026-06-02)
+
+
+### Features
+
+* add structured machine summaries to evaluations ([#444](https://github.com/ricardohg1998-create/career-ops/issues/444)) ([19a1820](https://github.com/ricardohg1998-create/career-ops/commit/19a1820f99e05db68508a2b769379384636a9e83))
+* add Ukrainian language and market support ([#323](https://github.com/ricardohg1998-create/career-ops/issues/323)) ([06d70d3](https://github.com/ricardohg1998-create/career-ops/commit/06d70d30b26754228e7560e6477f94e8d5360874))
+* **batch:** add --model flag to batch-runner.sh ([#504](https://github.com/ricardohg1998-create/career-ops/issues/504)) ([44def35](https://github.com/ricardohg1998-create/career-ops/commit/44def35c23c43e91d9633951d90f4ff50773c931))
+* **dashboard:** /-key live search across pipeline rows ([#526](https://github.com/ricardohg1998-create/career-ops/issues/526)) ([433f34f](https://github.com/ricardohg1998-create/career-ops/commit/433f34f20aec61c68fda5dd9274a06919d0d7fc2))
+* **i18n:** add Turkish (TR) language modes ([#341](https://github.com/ricardohg1998-create/career-ops/issues/341)) ([e87eb57](https://github.com/ricardohg1998-create/career-ops/commit/e87eb576df3aa394a7e28acd9f04a805ca0ca696))
+* **interview-prep:** split prep by interviewer audience ([#489](https://github.com/ricardohg1998-create/career-ops/issues/489)) ([d86b86c](https://github.com/ricardohg1998-create/career-ops/commit/d86b86c93ada6cd8d74213357a1566f17dccd280))
+* **scan:** add --verify flag to drop expired postings before pipeline append ([#487](https://github.com/ricardohg1998-create/career-ops/issues/487)) ([82f0c2e](https://github.com/ricardohg1998-create/career-ops/commit/82f0c2ef9ee2155cf70300c2f64e15eeaf40a69e))
+* **scan:** add local-parser provider and agent skip rules ([#595](https://github.com/ricardohg1998-create/career-ops/issues/595)) ([b3ef0ae](https://github.com/ricardohg1998-create/career-ops/commit/b3ef0ae3d7ca9ebffc1d8a524408c5dfa42e3446))
+* **scan:** add optional always_allow tier to location_filter ([#652](https://github.com/ricardohg1998-create/career-ops/issues/652)) ([d152da3](https://github.com/ricardohg1998-create/career-ops/commit/d152da36e7625c229d15f6f2ef92ab43d4398cc8)), closes [#650](https://github.com/ricardohg1998-create/career-ops/issues/650)
+
+
+### Bug Fixes
+
+* **dashboard:** width-aware Markdown rendering with table wrapping in viewer ([#513](https://github.com/ricardohg1998-create/career-ops/issues/513)) ([dc3a247](https://github.com/ricardohg1998-create/career-ops/commit/dc3a247733d9fb7eb7159836bed743a587231192))
+* **release:** sync VERSION file to 1.8.0 ([541917f](https://github.com/ricardohg1998-create/career-ops/commit/541917f627f3f328e5411a54685f5e8706761499))
+* **scan:** bootstrap providers/ on update + harden greenhouse detect() ([#696](https://github.com/ricardohg1998-create/career-ops/issues/696)) ([4b12081](https://github.com/ricardohg1998-create/career-ops/commit/4b120817fc1a07d4664ff764bf2a1c51e443b524))
+* **update-system:** apply() safety violation reverts cleanly and releases lock ([#484](https://github.com/ricardohg1998-create/career-ops/issues/484)) ([980153c](https://github.com/ricardohg1998-create/career-ops/commit/980153c315ec3fbbe6f9195c77d2f865b5a2e1a0))
+* **update-system:** bootstrap liveness-browser.mjs for v1.7→v1.8 upgrades ([#725](https://github.com/ricardohg1998-create/career-ops/issues/725)) ([1ea95f2](https://github.com/ricardohg1998-create/career-ops/commit/1ea95f293e742945fb4ba9befee4db8c50df6d2f)), closes [#704](https://github.com/ricardohg1998-create/career-ops/issues/704)
+* **update-system:** rollback() removes paths absent from backup branch ([#483](https://github.com/ricardohg1998-create/career-ops/issues/483)) ([f94a3be](https://github.com/ricardohg1998-create/career-ops/commit/f94a3be25890d83ee2664175bbe1bebf1f3eb033))
+
 ## [1.8.0](https://github.com/santifer/career-ops/compare/career-ops-v1.7.1...career-ops-v1.8.0) (2026-05-15)
 
 

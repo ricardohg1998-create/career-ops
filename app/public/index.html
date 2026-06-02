@@ -36,6 +36,7 @@
             <h1 id="view-title">Inicio</h1>
           </div>
           <div class="toolbar">
+            <span class="safety-pill">No submit/send/apply automatico</span>
             <button id="refresh-btn" class="icon-btn" title="Actualizar datos" aria-label="Actualizar datos">↻</button>
             <a class="ghost-btn" href="/api/health" target="_blank" rel="noreferrer">API</a>
           </div>
@@ -101,6 +102,23 @@
                 </form>
                 <pre id="scan-log" class="job-log"></pre>
               </section>
+              <section class="panel">
+                <div class="panel-head"><h2>Batch control room</h2><span class="muted">TSV + liveness, sin apply automatico.</span></div>
+                <div class="detail-actions">
+                  <button class="ghost-btn" data-v1-action="/api/integrity/merge" data-v1-method="GET" data-v1-log="#batch-log">Merge TSV preview</button>
+                  <button class="primary-btn" data-v1-action="/api/integrity/merge" data-v1-method="POST" data-v1-log="#batch-log">Run TSV merge</button>
+                  <button class="ghost-btn" data-v1-action="/api/integrity/verify" data-v1-method="GET" data-v1-log="#batch-log">Verify pipeline</button>
+                </div>
+                <form id="bulk-liveness-form" class="stack-form batch-form" aria-label="Verificar liveness en lote">
+                  <label class="field-label" for="bulk-liveness-urls">URLs para liveness bulk</label>
+                  <textarea id="bulk-liveness-urls" name="urls" rows="5" placeholder="Una URL por linea. Usa Playwright server-side; no aplica ni envia formularios."></textarea>
+                  <div class="toolbar">
+                    <button class="primary-btn">Verificar liveness bulk</button>
+                    <button id="fill-liveness-from-pipeline" class="ghost-btn" type="button">Usar pendientes</button>
+                  </div>
+                </form>
+                <pre id="batch-log" class="job-log small"></pre>
+              </section>
             </section>
 
             <section id="view-evaluate" class="view">
@@ -143,6 +161,29 @@
                   <button id="generate-report-pdf" class="primary-btn">Generar PDF</button>
                   <button id="generate-cv-pdf" class="ghost-btn">Generar CV ATS</button>
                 </div>
+                <section class="cv-workspace">
+                  <div class="panel-head">
+                    <h2>CV workspace</h2>
+                    <span class="muted">Preview, descarga y keyword coverage antes de enviar nada.</span>
+                  </div>
+                  <form id="cv-workspace-form" class="stack-form" aria-label="Generar CV dirigido">
+                    <div class="form-grid">
+                      <input name="title" placeholder="Titulo del CV / rol objetivo">
+                      <input name="company" placeholder="Empresa objetivo">
+                      <select name="format" aria-label="Formato PDF">
+                        <option value="a4">A4</option>
+                        <option value="letter">Letter</option>
+                      </select>
+                    </div>
+                    <textarea name="jdText" rows="5" placeholder="Pega JD o keywords objetivo para medir cobertura"></textarea>
+                    <div class="toolbar">
+                      <button class="primary-btn">Generar preview CV</button>
+                      <a id="cv-preview-link" class="ghost-btn disabled" aria-disabled="true">Preview HTML</a>
+                      <a id="cv-download-link" class="ghost-btn disabled" aria-disabled="true">Download PDF</a>
+                    </div>
+                  </form>
+                  <div id="keyword-coverage" class="keyword-coverage" aria-live="polite"></div>
+                </section>
                 <article id="report-viewer" class="report-viewer"></article>
                 <pre id="report-log" class="job-log small"></pre>
               </section>
@@ -208,11 +249,11 @@
                   </section>
                 </div>
                 <section class="panel">
-                  <div class="panel-head"><h2>Modulos V1</h2><span class="muted">Borradores, nunca submit automatico</span></div>
+                  <div class="panel-head"><h2>Asistentes de candidatura</h2><span class="muted">Usan la oferta seleccionada si existe</span></div>
                   <form id="module-form" class="stack-form">
                     <div class="form-grid">
-                      <label class="sr-only" for="module-kind">Modulo</label>
-                      <select id="module-kind" name="kind" aria-label="Modulo V1">
+                      <label class="sr-only" for="module-kind">Asistente</label>
+                      <select id="module-kind" name="kind" aria-label="Asistente de candidatura">
                         <option value="apply-assistant">Apply assistant</option>
                         <option value="deep-research">Deep research</option>
                         <option value="interview-prep">Interview prep</option>
@@ -221,13 +262,23 @@
                         <option value="training">Training</option>
                         <option value="project">Project</option>
                       </select>
+                      <select id="module-mode" name="mode" aria-label="Modo del modulo">
+                        <option value="draft">Draft only</option>
+                        <option value="assisted">Assisted mode</option>
+                      </select>
                       <input name="company" placeholder="Empresa">
                       <input name="role" placeholder="Rol">
                     </div>
-                    <textarea name="notes" rows="5" placeholder="Preguntas, contexto, IDs de reports separados por coma, o notas"></textarea>
-                    <button class="primary-btn">Generar modulo</button>
+                    <div class="form-grid">
+                      <input name="url" type="url" placeholder="Job URL para apply/deep/outreach" autocomplete="url">
+                      <input name="formUrl" type="url" placeholder="Form URL (solo asistencia, no submit)" autocomplete="url">
+                      <input name="contactUrl" type="url" placeholder="LinkedIn/contact URL (no send)" autocomplete="url">
+                    </div>
+                    <textarea name="notes" rows="5" placeholder="Preguntas, contexto adicional o IDs de reports separados por coma"></textarea>
+                    <p class="guardrail-copy">Visible guardrail: Career-Ops drafts and assists only. You review before any submit, send, or apply action.</p>
+                    <button class="primary-btn">Generar asistente</button>
                   </form>
-                  <pre id="module-output" class="json-box"></pre>
+                  <div id="module-output" class="assistant-output" aria-live="polite"></div>
                 </section>
               </section>
               <section id="lab-editor" class="lab-pane">

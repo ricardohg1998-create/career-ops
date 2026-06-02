@@ -5,8 +5,10 @@
   "scripts": {
     "doctor": "node doctor.mjs",
     "app": "node app/server.mjs",
-    "app:check": "node --check app/server.mjs && node --check app/smoke-test.mjs && node --check app/public/app.js && node --check app/public/modules/api.js && node --check app/public/modules/state.js && node --check app/lib/job-events.mjs && node --check app/lib/url-safety.mjs && node --check app/lib/markdown-table.mjs && node --check app/lib/script-runner.mjs && node --check app/lib/modules/index.mjs",
-    "app:smoke": "node app/smoke-test.mjs",
+    "app:check": "node --check app/server.mjs && node --check app/smoke-test.mjs && node --check app/browser-smoke.mjs && node --check app/public/app.js && node --check app/public/modules/api.js && node --check app/public/modules/state.js && node --check app/lib/job-events.mjs && node --check app/lib/url-safety.mjs && node --check app/lib/markdown-table.mjs && node --check app/lib/script-runner.mjs && node --check app/lib/assisted-workers.mjs && node --check app/lib/cv-workspace.mjs && node --check app/lib/modules/index.mjs",
+    "app:api-smoke": "node app/smoke-test.mjs",
+    "app:browser-smoke": "node app/browser-smoke.mjs",
+    "app:smoke": "node app/smoke-test.mjs && node app/browser-smoke.mjs",
     "test:quick": "node test-all.mjs --quick",
     "test": "node test-all.mjs",
     "verify": "node verify-pipeline.mjs",

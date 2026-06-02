@@ -86,6 +86,21 @@ a { color: inherit; }
 .brand strong { display: block; font-size: 18px; letter-spacing: .01em; }
 .brand small, .muted { color: var(--muted); font-size: 13px; }
 
+.safety-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid var(--line-dark);
+  border-left: 5px solid var(--bad);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
 .nav {
   display: grid;
   gap: 7px;
@@ -414,6 +429,11 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   border-radius: 0;
 }
 
+.ghost-btn.disabled {
+  opacity: .48;
+  pointer-events: none;
+}
+
 .table-row > * {
   min-width: 0;
 }
@@ -476,6 +496,69 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   font-family: "Cascadia Mono", Consolas, monospace;
 }
 
+.batch-form {
+  margin-top: 12px;
+}
+
+.cv-workspace {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px dashed var(--line-dark);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(90deg, rgba(197, 65, 24, .08), transparent 38%),
+    #fff;
+}
+
+.guardrail-copy {
+  margin: -2px 0 0;
+  color: var(--bad);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.keyword-coverage {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.coverage-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.coverage-summary strong {
+  color: var(--ink);
+  font: 800 28px/1 Georgia, "Times New Roman", serif;
+}
+
+.keyword-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.keyword-list span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+.keyword-list .covered {
+  border-color: var(--good);
+  color: var(--good);
+}
+
+.keyword-list .missing {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
 .job-log, .json-box, .compact-feed pre {
   min-height: 220px;
   max-height: 420px;
@@ -487,6 +570,79 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   white-space: pre-wrap;
 }
 .job-log.small { min-height: 90px; max-height: 180px; margin-top: 10px; }
+
+.assistant-output {
+  min-height: 160px;
+  max-height: 420px;
+  overflow: auto;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  padding: 14px;
+}
+
+.assistant-output.job-log {
+  background: var(--night);
+  color: #f6f1e8;
+  white-space: pre-wrap;
+  font-family: "Cascadia Mono", Consolas, monospace;
+}
+
+.assistant-output-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.assistant-output-head span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.assistant-markdown {
+  display: grid;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.assistant-markdown p,
+.assistant-markdown ul {
+  margin: 0;
+}
+
+.assistant-markdown ul {
+  padding-left: 18px;
+}
+
+.assistant-markdown li {
+  margin: 3px 0;
+}
+
+.assistant-markdown h1,
+.assistant-markdown h2,
+.assistant-markdown h3 {
+  margin: 8px 0 2px;
+  font: 800 18px/1.2 system-ui, sans-serif;
+}
+
+.assistant-error {
+  border-left: 4px solid var(--bad);
+  padding: 10px 12px;
+  background: #fff6f3;
+  color: var(--bad);
+}
+
+.assistant-artifact {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
 
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
 .tab {
@@ -502,7 +658,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 
 .report-viewer {
   margin-top: 12px;
-  line-height: 1.55;
+  line-height: 1.42;
 }
 
 .report-hero {
@@ -549,7 +705,33 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   font-size: 12px;
   margin-bottom: 10px;
 }
-.report-block .bullet { margin: 4px 0; }
+.report-markdown {
+  display: grid;
+  gap: 8px;
+}
+.report-markdown p,
+.report-markdown ul,
+.report-markdown table {
+  margin: 0;
+}
+.report-markdown ul {
+  padding-left: 18px;
+}
+.report-markdown li {
+  margin: 2px 0;
+}
+.report-markdown h1,
+.report-markdown h2,
+.report-markdown h3 {
+  margin: 8px 0 2px;
+  font: 800 18px/1.2 system-ui, sans-serif;
+}
+.report-markdown h1:first-child,
+.report-markdown h2:first-child,
+.report-markdown h3:first-child {
+  margin-top: 0;
+}
+.report-block .bullet { margin: 2px 0; }
 .md-table {
   width: 100%;
   border-collapse: collapse;

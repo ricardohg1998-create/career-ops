@@ -10,6 +10,15 @@ import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { classifyLiveness } from '../liveness-core.mjs';
 import {
+  buildModuleArtifactPath,
+  runApplyAssistant,
+  runDeepResearch,
+  runInterviewPrep,
+  runOutreach,
+  writeUserArtifact,
+} from './lib/assisted-workers.mjs';
+import { renderCvTemplate } from './lib/cv-workspace.mjs';
+import {
   buildDeepResearchPrompt as moduleDeepResearchPrompt,
   buildInterviewPrepDraft,
   compareOffers as moduleCompareOffers,
@@ -572,14 +581,18 @@ function createInlineJob(kind, work, options = {}) {
     },
   };
   jobs.set(id, job);
+  let settled = false;
 
   const push = (type, line, extra = {}) => {
+    if (job.status !== 'running' && type !== 'error' && type !== 'warning') return;
     const event = { type, line: String(line), at: new Date().toISOString(), ...extra };
     job.logs.push(event);
     if (job.logs.length > JOB_LOG_LIMIT) job.logs.splice(0, job.logs.length - JOB_LOG_LIMIT);
     for (const res of job.listeners) res.write(`data: ${JSON.stringify(event)}\n\n`);
   };
   const finish = (status, code = status === 'completed' ? 0 : 1) => {
+    if (settled) return;
+    settled = true;
     job.status = status;
     job.exitCode = code;
     job.endedAt = new Date().toISOString();
@@ -595,10 +608,20 @@ function createInlineJob(kind, work, options = {}) {
   };
 
   push('started', `${kind} iniciado`);
+  const timeout = setTimeout(() => {
+    if (job.status === 'running') {
+      push('warning', `Timeout tras ${Math.round((options.timeoutMs || JOB_TIMEOUT_MS) / 1000)}s`);
+      finish('failed', 1);
+    }
+  }, options.timeoutMs || JOB_TIMEOUT_MS);
   Promise.resolve()
     .then(() => work({ job, push }))
-    .then(() => finish(job.status === 'cancelled' ? 'cancelled' : 'completed', 0))
+    .then(() => {
+      clearTimeout(timeout);
+      finish(job.status === 'cancelled' ? 'cancelled' : 'completed', 0);
+    })
     .catch(err => {
+      clearTimeout(timeout);
       push('error', err.message || err);
       finish('failed', 1);
     });
@@ -794,30 +817,7 @@ function updateLanguageConfig(modesDir) {
 }
 
 function buildCvHtml({ title = 'Career-Ops CV Draft', jdText = '', report = null } = {}) {
-  const profile = yaml.load(readText(userFiles.profile, '{}')) || {};
-  const cv = readText(userFiles.cv, '');
-  const keywords = [...new Set(String(jdText || report?.markdown || '')
-    .toLowerCase()
-    .match(/[a-z][a-z0-9+#.-]{3,}/g) || [])]
-    .filter(word => !['with', 'from', 'this', 'that', 'will', 'role', 'team', 'work', 'para', 'como', 'este'].includes(word))
-    .slice(0, 20);
-  const name = profile.name || profile.full_name || title;
-  return {
-    keywords,
-    html: `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>${escapeHtml(name)} - CV</title>
-<style>
-body{font-family:Arial,sans-serif;margin:0;color:#111;background:#fff}.page{max-width:760px;margin:0 auto;padding:42px}
-h1{font-size:28px;margin:0 0 6px}.meta{color:#555;margin-bottom:24px}.section{margin:22px 0}h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #168092;padding-bottom:5px}
-.keywords{display:flex;flex-wrap:wrap;gap:6px}.keywords span{border:1px solid #bbb;border-radius:4px;padding:4px 7px;font-size:12px}pre{white-space:pre-wrap;font-family:inherit;line-height:1.45}
-</style></head><body><main class="page">
-<h1>${escapeHtml(name)}</h1>
-<div class="meta">${escapeHtml([profile.email, profile.location, profile.linkedin_url || profile.linkedin].filter(Boolean).join(' | '))}</div>
-<section class="section"><h2>Targeted Keywords</h2><div class="keywords">${keywords.map(k => `<span>${escapeHtml(k)}</span>`).join('')}</div></section>
-<section class="section"><h2>CV Source</h2><pre>${escapeHtml(cv)}</pre></section>
-</main></body></html>`,
-  };
+  return renderCvTemplate(ROOT, { title, jdText, report });
 }
 
 function buildApplyAssistant(body) {
@@ -907,6 +907,74 @@ function evaluateProject(body) {
   const uniqueness = Number(body.uniqueness || 3);
   const score = Number(((signal * 0.45 + demo * 0.35 + uniqueness * 0.20)).toFixed(1));
   return { ok: true, title, score, verdict: score >= 4 ? 'BUILD' : score >= 3 ? 'PIVOT' : 'SKIP' };
+}
+
+function moduleContext(body = {}) {
+  const report = body.reportId ? readReportById(String(body.reportId)) : null;
+  const profile = yaml.load(readText(userFiles.profile, '{}')) || {};
+  return {
+    report,
+    company: body.company || report?.company || 'Company',
+    role: body.role || report?.role || 'Role',
+    reportSummary: body.reportSummary || report?.tldr || '',
+    jobSignal: body.jobSignal || report?.sections?.match || report?.tldr || '',
+    candidateContext: [
+      readText(userFiles.cv),
+      readText(userFiles.profileMode),
+      readText(userFiles.articleDigest),
+    ].filter(Boolean).join('\n\n').slice(0, 24000),
+    compensation: body.compensation || profile.compensation?.target || profile.salary?.target || '',
+    workAuthorization: body.workAuthorization || profile.work_authorization || '',
+  };
+}
+
+function artifactMarkdownFor(kind, result) {
+  if (result?.markdown) return result.markdown;
+  if (result?.result?.message) return [
+    `# Outreach Draft`,
+    '',
+    `**Safety:** ${result.result.safety || 'Draft only. Do not send automatically.'}`,
+    '',
+    result.result.message,
+  ].join('\n');
+  return JSON.stringify(result, null, 2);
+}
+
+function createAssistedModuleJob(kind, body) {
+  const job = createInlineJob(`module:${kind}`, async ({ push }) => {
+    const context = moduleContext(body);
+    push('progress', `Preparando ${kind} asistido`);
+    let result;
+    if (kind === 'apply-assistant') result = await runApplyAssistant(body, context);
+    else if (kind === 'deep-research') result = await runDeepResearch(body, context);
+    else if (kind === 'interview-prep') result = await runInterviewPrep(body, context);
+    else if (kind === 'outreach') result = await runOutreach(body, context);
+    else throw new Error(`Modulo asistido no soportado: ${kind}`);
+
+    const artifactPath = buildModuleArtifactPath(kind, { ...body, company: context.company, role: context.role });
+    const changed = writeUserArtifact(ROOT, artifactPath, artifactMarkdownFor(kind, result));
+    push('artifact', JSON.stringify({ kind, path: changed, result }));
+    push('completed', `${kind} asistido listo`, { changedFiles: [changed] });
+  }, { timeoutMs: JOB_TIMEOUT_MS });
+  return job;
+}
+
+async function runAssistedModuleDryRun(kind, body) {
+  const context = moduleContext(body);
+  if (kind === 'apply-assistant') return runApplyAssistant(body, context);
+  if (kind === 'deep-research') return runDeepResearch(body, context);
+  if (kind === 'interview-prep') return runInterviewPrep(body, context);
+  if (kind === 'outreach') return runOutreach(body, context);
+  throw new Error(`Modulo asistido no soportado: ${kind}`);
+}
+
+function stepStates(names) {
+  return Object.fromEntries(names.map(name => [name, 'pending']));
+}
+
+function setStep(push, steps, step, status, extra = {}) {
+  steps[step] = status;
+  push('artifact', JSON.stringify({ step, status, steps, ...extra }));
 }
 
 async function handleApi(req, res, url) {
@@ -1105,6 +1173,50 @@ async function handleApi(req, res, url) {
     return json(res, 202, { jobId: job.id });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/scanner/history') {
+    const historyPath = path.join(ROOT, 'data', 'scan-history.tsv');
+    const lines = readText(historyPath).split(/\r?\n/).filter(Boolean).slice(-200);
+    const entries = lines.map((line, index) => {
+      const cells = line.split('\t');
+      return { index, raw: line, cells, url: cells.find(cell => /^https?:\/\//i.test(cell)) || '' };
+    });
+    return json(res, 200, { ok: true, entries });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/jobs/batch') {
+    const body = await parseJsonBody(req);
+    const rows = String(body.tsv || body.urls || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(0, 100);
+    const parsed = rows.map((line, index) => {
+      const cells = line.includes('\t') ? line.split('\t') : line.split(/\s+/);
+      const urlCell = cells.find(cell => /^https?:\/\//i.test(cell)) || cells[0] || '';
+      return { index, raw: line, cells, url: urlCell, status: 'pending', attempts: 0, logs: [] };
+    });
+    if (body.dryRun) return json(res, 200, { ok: true, dryRun: true, rows: parsed, warning: 'Dry-run only: no offers will be applied to.' });
+    const job = createInlineJob('batch-control-room', async ({ push }) => {
+      const results = [];
+      for (const row of parsed) {
+        row.status = 'running';
+        row.attempts += 1;
+        push('progress', `Fila ${row.index + 1}: ${row.url || 'sin URL'}`);
+        try {
+          const target = requireSafeUrl(row.url);
+          const live = body.verify ? await checkLiveness(target) : { result: 'not-verified' };
+          row.status = live.active === false ? 'partial' : 'completed';
+          row.logs.push(body.verify ? live.reason : 'Queued without verification');
+          results.push({ ...row, live });
+          push('artifact', JSON.stringify({ row: row.index, status: row.status, live }));
+        } catch (err) {
+          row.status = 'failed';
+          row.logs.push(err.message);
+          results.push({ ...row, error: err.message });
+          push('warning', `Fila ${row.index + 1} fallida: ${err.message}`);
+        }
+      }
+      push('artifact', JSON.stringify({ summary: { total: results.length, completed: results.filter(item => item.status === 'completed').length, failed: results.filter(item => item.status === 'failed').length }, results, safety: 'Batch evaluates/validates only. It never applies to offers automatically.' }));
+    }, { timeoutMs: JOB_TIMEOUT_MS });
+    return json(res, 202, { ok: true, jobId: job.id, rows: parsed.length });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/jobs/liveness') {
     const body = await parseJsonBody(req);
     const target = requireSafeUrl(body.url);
@@ -1167,56 +1279,90 @@ async function handleApi(req, res, url) {
     const pdfRel = `output/${base}.pdf`;
     writeFileSync(path.join(ROOT, htmlRel), cvDraft.html, 'utf-8');
     const format = ['a4', 'letter'].includes(String(body.format)) ? String(body.format) : 'a4';
-    const job = createJob('cv-pdf', process.execPath, ['generate-pdf.mjs', htmlRel, pdfRel, `--format=${format}`]);
-    return json(res, 202, { ok: true, jobId: job.id, htmlPath: htmlRel, outputPath: pdfRel, keywords: cvDraft.keywords });
+    const job = createJob('cv-pdf', process.execPath, ['generate-pdf.mjs', htmlRel, pdfRel, `--format=${format}`], {
+      async onClose(code, jobRecord, push) {
+        if (code === 0 && existsSync(path.join(ROOT, pdfRel))) {
+          push('artifact', JSON.stringify({ htmlPath: htmlRel, outputPath: pdfRel, coverage: cvDraft.coverage }));
+          return { code: 0 };
+        }
+        push('error', `No se verifico el PDF esperado: ${pdfRel}`);
+        return { code: 1 };
+      },
+    });
+    return json(res, 202, { ok: true, jobId: job.id, htmlPath: htmlRel, outputPath: pdfRel, keywords: cvDraft.keywords, coverage: cvDraft.coverage });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/jobs/auto-pipeline') {
     const body = await parseJsonBody(req);
     const job = createInlineJob('auto-pipeline', async ({ push }) => {
+      const steps = stepStates(['url-guard', 'liveness', 'jd-extraction', 'evaluation', 'tracker-merge', 'report-pdf', 'cv-pdf', 'apply-draft']);
       const before = new Set(listReports().map(report => report.id));
       let jdText = String(body.jdText || '').trim();
       const sourceUrl = String(body.url || '').trim();
+      let extractionTrust = jdText ? 'trusted-manual' : 'untrusted';
       if (sourceUrl) {
+        setStep(push, steps, 'url-guard', 'running');
         const target = requireSafeUrl(sourceUrl);
-        push('progress', 'Verificando liveness');
+        setStep(push, steps, 'url-guard', 'completed', { url: target });
+        setStep(push, steps, 'liveness', 'running');
         const live = await checkLiveness(target);
-        push('artifact', JSON.stringify({ step: 'liveness', live }));
+        setStep(push, steps, 'liveness', live.active ? 'completed' : 'partial', { live });
         if (!jdText) {
-          push('progress', 'Extrayendo JD con Playwright');
+          setStep(push, steps, 'jd-extraction', 'running');
           jdText = await extractJobText(target);
+          extractionTrust = jdText.length > 1200 ? 'trusted-playwright' : 'untrusted';
+          setStep(push, steps, 'jd-extraction', extractionTrust === 'trusted-playwright' ? 'completed' : 'partial', {
+            chars: jdText.length,
+            trust: extractionTrust,
+          });
         }
+      } else {
+        setStep(push, steps, 'url-guard', 'completed', { url: null });
+        setStep(push, steps, 'liveness', 'partial', { reason: 'No URL supplied' });
+        setStep(push, steps, 'jd-extraction', jdText ? 'completed' : 'failed', { trust: extractionTrust });
       }
       if (!jdText) throw new Error('Pega un JD o indica una URL.');
       mkdirSync(path.join(ROOT, 'jds'), { recursive: true });
       const name = `${new Date().toISOString().slice(0, 10)}-${slugify(body.title || sourceUrl || 'job')}-${Date.now()}.txt`;
       const rel = `jds/${name}`;
       writeFileSync(path.join(ROOT, rel), jdText, 'utf-8');
-      push('artifact', JSON.stringify({ step: 'jd', path: rel }));
+      push('artifact', JSON.stringify({ step: 'jd', path: rel, trust: body.mock ? 'untrusted-mock' : extractionTrust }));
 
       const evalArgs = ['opencode-eval.mjs', '--file', rel];
       if (sourceUrl) evalArgs.push('--url', sourceUrl);
       if (body.preset) evalArgs.push('--preset', String(body.preset));
       if (body.mock) evalArgs.push('--mock');
-      push('progress', 'Ejecutando evaluacion');
+      setStep(push, steps, 'evaluation', 'running', { trust: body.mock ? 'untrusted-mock' : extractionTrust });
       const evaluation = await commandText(process.execPath, evalArgs, { timeout: JOB_TIMEOUT_MS });
       if (evaluation.stdout) push('progress', evaluation.stdout);
       if (evaluation.stderr) push('warning', evaluation.stderr);
-      if (!evaluation.ok) throw new Error(evaluation.error || 'Evaluation failed');
+      if (!evaluation.ok) {
+        setStep(push, steps, 'evaluation', 'failed');
+        throw new Error(evaluation.error || 'Evaluation failed');
+      }
+      setStep(push, steps, 'evaluation', body.mock ? 'partial' : 'completed', { trust: body.mock ? 'untrusted-mock' : extractionTrust });
 
-      push('progress', 'Fusionando tracker');
+      setStep(push, steps, 'tracker-merge', 'running');
       const merge = await commandText(process.execPath, ['merge-tracker.mjs']);
       if (merge.stdout) push('progress', merge.stdout);
       if (!merge.ok) throw new Error(merge.error || 'Tracker merge failed');
+      setStep(push, steps, 'tracker-merge', 'completed');
 
       const report = latestReportAfter(before);
       if (report?.path) {
-        push('progress', 'Generando PDF de informe');
-        const reportPdf = await commandText(process.execPath, ['generate-report-pdf.mjs', report.path, `output/${path.basename(report.path, '.md')}.pdf`], { timeout: JOB_TIMEOUT_MS });
+        const reportPdfRel = `output/${path.basename(report.path, '.md')}.pdf`;
+        setStep(push, steps, 'report-pdf', 'running');
+        const reportPdf = await commandText(process.execPath, ['generate-report-pdf.mjs', report.path, reportPdfRel], { timeout: JOB_TIMEOUT_MS });
         if (reportPdf.stdout) push('progress', reportPdf.stdout);
         if (reportPdf.stderr) push('warning', reportPdf.stderr);
+        if (reportPdf.ok && existsSync(path.join(ROOT, reportPdfRel))) {
+          setStep(push, steps, 'report-pdf', 'completed', { reportPdf: reportPdfRel });
+        } else {
+          setStep(push, steps, 'report-pdf', 'failed', { reportPdf: reportPdfRel });
+          push('warning', `Report PDF no verificado: ${reportPdfRel}`);
+        }
 
-        push('progress', 'Generando CV PDF ATS');
+        setStep(push, steps, 'cv-pdf', 'running');
         const cvDraft = buildCvHtml({ title: report.title, jdText, report: readReportById(report.id) });
         const base = `cv-${slugify(report.company)}-${new Date().toISOString().slice(0, 10)}`;
         const htmlRel = `output/${base}.html`;
@@ -1225,11 +1371,31 @@ async function handleApi(req, res, url) {
         const cvPdf = await commandText(process.execPath, ['generate-pdf.mjs', htmlRel, pdfRel, '--format=a4'], { timeout: JOB_TIMEOUT_MS });
         if (cvPdf.stdout) push('progress', cvPdf.stdout);
         if (cvPdf.stderr) push('warning', cvPdf.stderr);
+        if (cvPdf.ok && existsSync(path.join(ROOT, pdfRel))) {
+          setStep(push, steps, 'cv-pdf', 'completed', { htmlPath: htmlRel, cvPdf: pdfRel, coverage: cvDraft.coverage });
+        } else {
+          setStep(push, steps, 'cv-pdf', 'failed', { htmlPath: htmlRel, cvPdf: pdfRel, coverage: cvDraft.coverage });
+          push('warning', `CV PDF no verificado: ${pdfRel}`);
+        }
 
         if ((report.score || 0) >= 4.5) {
-          push('artifact', JSON.stringify({ step: 'draft-answers', draft: draftApplicationResponses({ company: report.company, role: report.role, reportSummary: report.tldr, questions: [] }).markdown }));
+          setStep(push, steps, 'apply-draft', 'running');
+          const applyDraft = await runApplyAssistant({
+            company: report.company,
+            role: report.role,
+            questions: ['Why are you interested in this role?', 'Tell us about a relevant achievement.'],
+          }, moduleContext({ reportId: report.id }));
+          const applyPath = writeUserArtifact(ROOT, buildModuleArtifactPath('apply-assistant', report), applyDraft.markdown);
+          setStep(push, steps, 'apply-draft', 'completed', { path: applyPath });
+          push('artifact', JSON.stringify({ step: 'draft-answers', path: applyPath, draft: applyDraft.markdown }));
+        } else {
+          setStep(push, steps, 'apply-draft', 'partial', { reason: 'Score below 4.5' });
         }
-        push('artifact', JSON.stringify({ step: 'completed', report: report.path, reportPdf: `output/${path.basename(report.path, '.md')}.pdf`, cvPdf: pdfRel }));
+        push('artifact', JSON.stringify({ step: 'completed', report: report.path, reportPdf: reportPdfRel, cvPdf: pdfRel, steps }));
+      } else {
+        push('warning', 'No se detecto informe nuevo tras la evaluacion.');
+        setStep(push, steps, 'report-pdf', 'failed');
+        setStep(push, steps, 'cv-pdf', 'failed');
       }
     }, { timeoutMs: JOB_TIMEOUT_MS });
     return json(res, 202, { ok: true, jobId: job.id });
@@ -1298,6 +1464,11 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/modules/apply-assistant') {
     const body = await parseJsonBody(req);
+    if (body.mode === 'assisted') {
+      if (body.dryRun) return json(res, 200, { ok: true, result: await runAssistedModuleDryRun('apply-assistant', body), dryRun: true });
+      const job = createAssistedModuleJob('apply-assistant', body);
+      return json(res, 202, { ok: true, jobId: job.id });
+    }
     const report = body.reportId ? readReportById(String(body.reportId)) : null;
     return json(res, 200, { ok: true, result: draftApplicationResponses({
       ...body,
@@ -1311,16 +1482,31 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/modules/deep-research') {
     const body = await parseJsonBody(req);
+    if (body.mode === 'assisted') {
+      if (body.dryRun) return json(res, 200, { ok: true, result: await runAssistedModuleDryRun('deep-research', body), dryRun: true });
+      const job = createAssistedModuleJob('deep-research', body);
+      return json(res, 202, { ok: true, jobId: job.id });
+    }
     return json(res, 200, { ok: true, markdown: moduleDeepResearchPrompt({ ...body, candidateContext: readText(userFiles.cv) }) });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/modules/interview-prep') {
     const body = await parseJsonBody(req);
+    if (body.mode === 'assisted') {
+      if (body.dryRun) return json(res, 200, { ok: true, result: await runAssistedModuleDryRun('interview-prep', body), dryRun: true });
+      const job = createAssistedModuleJob('interview-prep', body);
+      return json(res, 202, { ok: true, jobId: job.id });
+    }
     return json(res, 200, { ok: true, markdown: buildInterviewPrepDraft(body) });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/modules/outreach') {
     const body = await parseJsonBody(req);
+    if (body.mode === 'assisted') {
+      if (body.dryRun) return json(res, 200, { ok: true, result: await runAssistedModuleDryRun('outreach', body), dryRun: true });
+      const job = createAssistedModuleJob('outreach', body);
+      return json(res, 202, { ok: true, jobId: job.id });
+    }
     return json(res, 200, { ok: true, result: createLinkedInOutreachMessage(body) });
   }
 

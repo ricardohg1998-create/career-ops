@@ -71,6 +71,40 @@ function splitTableRow(line = '') {
   return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
 }
 
+function compactMdToHtml(markdown = '') {
+  const escaped = escapeHtml(markdown).replace(/\r\n/g, '\n');
+  const withTables = renderMarkdownTables(escaped);
+  const lines = withTables.split('\n');
+  const blocks = [];
+  let list = [];
+  const flushList = () => {
+    if (!list.length) return;
+    blocks.push(`<ul>${list.map(item => `<li>${item}</li>`).join('')}</ul>`);
+    list = [];
+  };
+  for (const line of lines) {
+    const item = line.match(/^\s*[-*]\s+(.+)$/);
+    if (item) {
+      list.push(item[1].trim());
+      continue;
+    }
+    flushList();
+    blocks.push(line);
+  }
+  flushList();
+  return blocks.join('\n')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    .split(/\n{2,}/)
+    .map(block => block.trim())
+    .filter(Boolean)
+    .map(block => /^(<h[1-3]|<ul|<table)/.test(block) ? block : `<p>${block.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
 function scoreClass(score) {
   if (typeof score !== 'number') return '';
   if (score >= 4) return 'top';
@@ -266,6 +300,13 @@ function renderReports() {
   `).join('');
 }
 
+function appendLog(selector, message, reset = false) {
+  const log = $(selector);
+  if (!log) return;
+  log.textContent = reset ? message : `${log.textContent}${message}`;
+  log.scrollTop = log.scrollHeight;
+}
+
 function renderJobsHint() {
   const running = state.jobs.filter(job => job.status === 'running');
   $('#evaluate-status').textContent = running.length ? `${running.length} job(s) activos` : '';
@@ -282,6 +323,8 @@ function selectApplication(number) {
   if (number === undefined || number === null) return;
   state.selected = { kind: 'app', id: Number(number) };
   renderApplications();
+  hydrateEvaluateFromSelection();
+  hydrateAssistantsFromSelection();
   renderDetail();
 }
 
@@ -291,8 +334,92 @@ async function selectReport(id) {
   state.loadedReport = report;
   state.selected = { kind: 'report', id: report.id };
   renderReportViewer(report);
+  hydrateEvaluateFromSelection();
+  hydrateAssistantsFromSelection();
   renderReports();
   renderDetail();
+}
+
+function selectedContext() {
+  if (state.selected.kind === 'report' && state.loadedReport) {
+    return {
+      kind: 'report',
+      company: state.loadedReport.company || '',
+      role: state.loadedReport.role || '',
+      url: state.loadedReport.url || '',
+      reportId: state.loadedReport.id || '',
+      reportPath: state.loadedReport.path || '',
+      notes: state.loadedReport.tldr || '',
+    };
+  }
+  if (state.selected.kind === 'app') {
+    const app = state.applications.find(row => row.number === state.selected.id);
+    if (!app) return {};
+    const reportId = app.reportPath ? app.reportPath.split('/').pop().replace(/\.md$/, '') : '';
+    return {
+      kind: 'app',
+      company: app.company || '',
+      role: app.role || '',
+      url: app.jobUrl || '',
+      reportId,
+      reportPath: app.reportPath || '',
+      notes: app.notes || app.tldr || '',
+    };
+  }
+  if (state.selected.kind === 'pipeline') {
+    const item = state.pipeline.find(row => String(row.id) === String(state.selected.id));
+    if (!item) return {};
+    return {
+      kind: 'pipeline',
+      company: item.company || '',
+      role: item.role || '',
+      url: item.url || '',
+      reportId: '',
+      reportPath: '',
+      notes: '',
+    };
+  }
+  return {};
+}
+
+function contextKey(ctx = selectedContext()) {
+  return [ctx.kind, ctx.reportId, ctx.company, ctx.role, ctx.url].filter(Boolean).join('|');
+}
+
+function hydrateEvaluateFromSelection() {
+  const ctx = selectedContext();
+  if (!ctx.company && !ctx.role && !ctx.url) return;
+  const key = contextKey(ctx);
+  const changed = $('#evaluate-form')?.dataset.contextKey !== key;
+  const urlInput = $('#evaluate-url');
+  const titleInput = $('#evaluate-title');
+  const jdInput = $('#evaluate-jd');
+  if (urlInput) urlInput.value = ctx.url || '';
+  if (titleInput) titleInput.value = [ctx.company, ctx.role].filter(Boolean).join(' - ');
+  if (jdInput && ctx.notes && (changed || !jdInput.value.trim())) {
+    jdInput.value = `Contexto del informe seleccionado:\n${ctx.notes}`;
+  }
+  if ($('#evaluate-form')) $('#evaluate-form').dataset.contextKey = key;
+}
+
+function hydrateAssistantsFromSelection(kind = null) {
+  const form = $('#module-form');
+  if (!form) return;
+  const ctx = selectedContext();
+  if (!ctx.company && !ctx.role && !ctx.url && !ctx.reportId) return;
+  const key = contextKey(ctx);
+  const changed = form.dataset.contextKey !== key;
+  if (kind) form.elements.kind.value = kind;
+  if (form.elements.company) form.elements.company.value = ctx.company || '';
+  if (form.elements.role) form.elements.role.value = ctx.role || '';
+  if (form.elements.url) form.elements.url.value = ctx.url || '';
+  if (form.elements.notes && (changed || !form.elements.notes.value.trim())) {
+    form.elements.notes.value = [
+      ctx.reportId,
+      ctx.notes ? `Contexto: ${ctx.notes}` : '',
+    ].filter(Boolean).join('\n');
+  }
+  form.dataset.contextKey = key;
 }
 
 function renderReportViewer(report) {
@@ -319,7 +446,7 @@ function renderReportViewer(report) {
       ${blocks.map(([title, content]) => `
         <section class="report-block">
           <h3>${escapeHtml(title)}</h3>
-          <div>${mdToHtml(content).slice(0, 10000)}</div>
+          <div class="report-markdown">${compactMdToHtml(content).slice(0, 10000)}</div>
         </section>
       `).join('')}
     </div>
@@ -394,6 +521,8 @@ function renderApplicationDetail(box) {
     </select>
     <div class="detail-actions">
       ${app.reportPath ? `<button class="primary-btn" data-open-report-path="${escapeHtml(app.reportPath)}">Ver informe</button>` : ''}
+      <button class="ghost-btn" data-open-assistant="apply-assistant">Apply assistant</button>
+      <button class="ghost-btn" data-open-assistant="interview-prep">Preparar entrevista</button>
       ${app.pdfPath ? `<a class="ghost-btn" href="/api/files?path=${encodeURIComponent(app.pdfPath)}" target="_blank">PDF</a>` : ''}
       ${app.jobUrl ? `<a class="ghost-btn" href="${escapeHtml(app.jobUrl)}" target="_blank" rel="noreferrer">Oferta</a>` : ''}
       <button class="ghost-btn" data-learning-app="${app.number}">Guardar aprendizaje</button>
@@ -422,6 +551,9 @@ function renderReportDetail(box) {
     </dl>
     <div class="detail-actions">
       <button class="primary-btn" data-report-pdf="${escapeHtml(report.path)}">Generar PDF</button>
+      <button class="ghost-btn" data-open-assistant="apply-assistant">Apply assistant</button>
+      <button class="ghost-btn" data-open-assistant="deep-research">Research</button>
+      <button class="ghost-btn" data-open-assistant="interview-prep">Entrevista</button>
       ${report.url ? `<a class="ghost-btn" href="${escapeHtml(report.url)}" target="_blank" rel="noreferrer">Oferta</a>` : ''}
       <button class="ghost-btn" data-learning-report="${escapeHtml(report.id)}">Guardar aprendizaje</button>
     </div>
@@ -455,7 +587,7 @@ async function saveEditor() {
 
 function streamJob(jobId, target) {
   const log = $(target);
-  log.textContent = '';
+  log.textContent = `[job] ${jobId}\n`;
   const source = new EventSource(`/api/jobs/${jobId}/events`);
   source.onmessage = event => {
     const item = JSON.parse(event.data);
@@ -471,6 +603,28 @@ function streamJob(jobId, target) {
     source.close();
     notify('Conexion de eventos cerrada', 'warn');
   };
+}
+
+function streamReturnedJob(result, target) {
+  if (!result?.jobId) return false;
+  streamJob(result.jobId, target);
+  return true;
+}
+
+function setArtifactLink(selector, relPath) {
+  const link = $(selector);
+  if (!link) return;
+  if (!relPath) {
+    link.removeAttribute('href');
+    link.classList.add('disabled');
+    link.setAttribute('aria-disabled', 'true');
+    return;
+  }
+  link.href = `/api/files?path=${encodeURIComponent(relPath)}`;
+  link.target = '_blank';
+  link.rel = 'noreferrer';
+  link.classList.remove('disabled');
+  link.removeAttribute('aria-disabled');
 }
 
 async function loadInsights() {
@@ -548,6 +702,10 @@ async function runV1Action(path, method, logSelector) {
   log.textContent = 'Ejecutando...\n';
   try {
     const result = await api(path, { method });
+    if (streamReturnedJob(result, logSelector)) {
+      notify(`Job iniciado: ${result.jobId}`);
+      return;
+    }
     log.textContent = JSON.stringify(result.result ?? result, null, 2);
     notify('Accion V1 completada');
   } catch (err) {
@@ -559,16 +717,120 @@ async function runV1Action(path, method, logSelector) {
 function modulePayload(form) {
   const data = Object.fromEntries(new FormData(form));
   const reportIds = String(data.notes || '').split(',').map(s => s.trim()).filter(Boolean);
-  const questions = String(data.notes || '').split(/\r?\n/).filter(Boolean);
+  const questions = String(data.notes || '').split(/\r?\n/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .filter(line => !state.reports.some(report => report.id === line))
+    .filter(line => !/^contexto\s*:/i.test(line));
+  const mode = data.mode || 'draft';
+  const ctx = selectedContext();
+  const reportId = reportIds.find(id => state.reports.some(report => report.id === id)) || ctx.reportId || '';
   return {
-    company: data.company,
-    role: data.role,
+    company: data.company || ctx.company,
+    role: data.role || ctx.role,
+    mode,
+    assisted: mode === 'assisted',
+    url: data.url || ctx.url,
+    formUrl: data.formUrl,
+    contactUrl: data.contactUrl,
+    type: data.contactUrl ? 'contact' : 'recruiter',
     notes: data.notes,
     questions,
-    reportIds,
-    title: data.company || data.role || data.kind,
+    reportIds: reportId ? [reportId, ...reportIds.filter(id => id !== reportId)] : reportIds,
+    reportId,
+    title: data.company || data.role || ctx.company || ctx.role || data.kind,
     scores: { northStar: 3, recruiterSignal: 3, timeEffort: 3, opportunityCost: 3, risk: 3, portfolioArtifact: 3, targetSignal: 3, uniqueness: 3, demoAbility: 3, metricsPotential: 3, timeToMvp: 3, starStory: 3 },
   };
+}
+
+function renderModuleResult(result) {
+  if (result.markdown) return result.markdown;
+  if (result.result?.markdown) return result.result.markdown;
+  if (result.result?.message) return result.result.message;
+  return JSON.stringify(result.result ?? result, null, 2);
+}
+
+function renderAssistantOutput(result) {
+  const box = $('#module-output');
+  const text = renderModuleResult(result);
+  box.classList.remove('job-log', 'running');
+  box.innerHTML = `
+    <div class="assistant-output-head">
+      <strong>Resultado del asistente</strong>
+      <span>Revisa antes de copiar, enviar o aplicar</span>
+    </div>
+    <div class="assistant-markdown">${compactMdToHtml(text)}</div>
+  `;
+}
+
+function renderAssistantLog(jobId) {
+  const box = $('#module-output');
+  box.classList.add('job-log', 'running');
+  box.textContent = `[job] ${jobId}\n`;
+  const source = new EventSource(`/api/jobs/${jobId}/events`);
+  source.onmessage = event => {
+    const item = JSON.parse(event.data);
+    if (item.type === 'artifact') {
+      try {
+        const artifact = JSON.parse(item.line);
+        if (artifact.result) {
+          renderAssistantOutput({
+            result: {
+              markdown: artifact.result.markdown || artifact.result.result?.message || JSON.stringify(artifact.result, null, 2),
+            },
+          });
+          if (artifact.path) {
+            $('#module-output').insertAdjacentHTML('beforeend', `<p class="assistant-artifact"><a href="/api/files?path=${encodeURIComponent(artifact.path)}" target="_blank" rel="noreferrer">Abrir archivo generado</a></p>`);
+          }
+          return;
+        }
+      } catch {}
+    }
+    if (box.classList.contains('job-log')) {
+      box.textContent += `[${item.type}] ${item.line}\n`;
+      box.scrollTop = box.scrollHeight;
+    }
+    if (['done', 'completed', 'error'].includes(item.type)) {
+      source.close();
+      notify(item.type === 'error' ? 'Job finalizado con error' : 'Asistente listo', item.type === 'error' ? 'error' : 'ok');
+      loadAll().catch(console.error);
+    }
+  };
+  source.onerror = () => {
+    source.close();
+    notify('Conexion de eventos cerrada', 'warn');
+  };
+}
+
+function renderKeywordCoverage(keywords = [], sourceText = '') {
+  const box = $('#keyword-coverage');
+  const cvText = String(state.editorData?.cv || '').toLowerCase();
+  const jdText = String(sourceText || '').toLowerCase();
+  const unique = [...new Set(keywords.filter(Boolean))];
+  const rows = unique.map(word => ({
+    word,
+    inCv: cvText.includes(String(word).toLowerCase()),
+    inTarget: jdText.includes(String(word).toLowerCase()),
+  }));
+  const covered = rows.filter(row => row.inCv).length;
+  box.innerHTML = `
+    <div class="coverage-summary">
+      <strong>${covered}/${rows.length || 0}</strong>
+      <span>keywords covered in cv.md</span>
+    </div>
+    <div class="keyword-list">
+      ${rows.map(row => `<span class="${row.inCv ? 'covered' : 'missing'}">${escapeHtml(row.word)}</span>`).join('') || '<span class="muted">Genera un CV para ver keywords.</span>'}
+    </div>
+  `;
+}
+
+function openAssistant(kind) {
+  setView('lab');
+  $$('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.lab === 'insights'));
+  $$('.lab-pane').forEach(pane => pane.classList.toggle('active', pane.id === 'lab-insights'));
+  hydrateAssistantsFromSelection(kind);
+  $('#module-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  notify('Asistente preparado con la oferta seleccionada');
 }
 
 function wireEvents() {
@@ -590,13 +852,15 @@ function wireEvents() {
       const id = target.dataset.openReportPath.split('/').pop().replace(/\.md$/, '');
       setView('evaluate');
       await selectReport(id);
+      hydrateEvaluateFromSelection();
     }
+    if (target.dataset.openAssistant) openAssistant(target.dataset.openAssistant);
     if (target.dataset.reportPdf) {
       const result = await api('/api/jobs/report-pdf', { method: 'POST', body: { reportPath: target.dataset.reportPdf } });
       streamJob(result.jobId, '#report-log');
     }
     if (target.dataset.v1Action) {
-      const log = target.dataset.v1Action.includes('/update') || target.dataset.v1Action.includes('/provider') || target.dataset.v1Action.includes('/language') ? '#update-log' : '#integrity-log';
+      const log = target.dataset.v1Log || (target.dataset.v1Action.includes('/update') || target.dataset.v1Action.includes('/provider') || target.dataset.v1Action.includes('/language') ? '#update-log' : '#integrity-log');
       await runV1Action(target.dataset.v1Action, target.dataset.v1Method || 'GET', log);
     }
     if (target.dataset.learningApp) {
@@ -634,6 +898,9 @@ function wireEvents() {
   $('#status-filter').addEventListener('change', renderApplications);
   $('#score-filter').addEventListener('change', renderApplications);
   $('#scan-open-btn').addEventListener('click', () => $('#scan-panel').classList.toggle('hidden'));
+  $('#scan-open-btn').addEventListener('click', event => {
+    event.currentTarget.setAttribute('aria-expanded', String(!$('#scan-panel').classList.contains('hidden')));
+  });
 
   $('#pipeline-form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -650,7 +917,8 @@ function wireEvents() {
     const body = { company: form.get('company'), dryRun: form.has('dryRun'), verify: form.has('verify') };
     try {
       const result = await api('/api/jobs/scan', { method: 'POST', body });
-      streamJob(result.jobId, '#scan-log');
+      streamReturnedJob(result, '#scan-log');
+      notify(`Scan job iniciado: ${result.jobId}`);
     } catch (err) {
       $('#scan-log').textContent = `[error] ${err.message}`;
     }
@@ -665,7 +933,8 @@ function wireEvents() {
     }
     try {
       const result = await api('/api/jobs/evaluate', { method: 'POST', body });
-      streamJob(result.jobId, '#evaluate-log');
+      streamReturnedJob(result, '#evaluate-log');
+      notify(`Evaluate job iniciado: ${result.jobId}`);
     } catch (err) {
       $('#evaluate-log').textContent = `[error] ${err.message}`;
     }
@@ -679,8 +948,8 @@ function wireEvents() {
     }
     try {
       const result = await api('/api/jobs/auto-pipeline', { method: 'POST', body });
-      streamJob(result.jobId, '#evaluate-log');
-      notify('Auto-pipeline iniciado');
+      streamReturnedJob(result, '#evaluate-log');
+      notify(`Auto-pipeline iniciado: ${result.jobId}`);
     } catch (err) {
       $('#evaluate-log').textContent = `[error] ${err.message}`;
       notify(err.message, 'error');
@@ -692,16 +961,62 @@ function wireEvents() {
     const report = state.loadedReport || state.reports.find(row => row.id === $('#report-picker').value);
     if (!report) return;
     const result = await api('/api/jobs/report-pdf', { method: 'POST', body: { reportPath: report.path } });
-    streamJob(result.jobId, '#report-log');
+    streamReturnedJob(result, '#report-log');
+    notify(`PDF job iniciado: ${result.jobId}`);
   });
   $('#generate-cv-pdf').addEventListener('click', async () => {
     const report = state.loadedReport || state.reports.find(row => row.id === $('#report-picker').value);
     try {
       const result = await api('/api/jobs/cv-pdf', { method: 'POST', body: { reportId: report?.id, company: report?.company } });
-      streamJob(result.jobId, '#report-log');
-      notify('CV ATS iniciado');
+      streamReturnedJob(result, '#report-log');
+      setArtifactLink('#cv-preview-link', result.htmlPath);
+      setArtifactLink('#cv-download-link', result.outputPath);
+      renderKeywordCoverage(result.keywords, report?.markdown || '');
+      notify(`CV ATS iniciado: ${result.jobId}`);
     } catch (err) {
       $('#report-log').textContent = `[error] ${err.message}`;
+      notify(err.message, 'error');
+    }
+  });
+
+  $('#cv-workspace-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const body = Object.fromEntries(new FormData(form));
+    const report = state.loadedReport || state.reports.find(row => row.id === $('#report-picker').value);
+    if (report?.id) body.reportId = report.id;
+    try {
+      const result = await api('/api/jobs/cv-pdf', { method: 'POST', body });
+      streamReturnedJob(result, '#report-log');
+      setArtifactLink('#cv-preview-link', result.htmlPath);
+      setArtifactLink('#cv-download-link', result.outputPath);
+      renderKeywordCoverage(result.keywords, body.jdText || report?.markdown || '');
+      notify(`CV preview job iniciado: ${result.jobId}`);
+    } catch (err) {
+      $('#report-log').textContent = `[error] ${err.message}`;
+      notify(err.message, 'error');
+    }
+  });
+
+  $('#fill-liveness-from-pipeline').addEventListener('click', () => {
+    const urls = state.pipeline.filter(item => !item.done && item.url).map(item => item.url);
+    $('#bulk-liveness-urls').value = urls.join('\n');
+    notify(`${urls.length} URLs pendientes cargadas`);
+  });
+
+  $('#bulk-liveness-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const urls = String(new FormData(event.currentTarget).get('urls') || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!urls.length) {
+      appendLog('#batch-log', '[error] Pega al menos una URL.\n', true);
+      return;
+    }
+    try {
+      const result = await api('/api/jobs/liveness-bulk', { method: 'POST', body: { urls } });
+      streamReturnedJob(result, '#batch-log');
+      notify(`Liveness job iniciado: ${result.jobId}`);
+    } catch (err) {
+      $('#batch-log').textContent = `[error] ${err.message}`;
       notify(err.message, 'error');
     }
   });
@@ -711,10 +1026,16 @@ function wireEvents() {
     const kind = new FormData(event.currentTarget).get('kind');
     try {
       const result = await api(`/api/modules/${kind}`, { method: 'POST', body: modulePayload(event.currentTarget) });
-      $('#module-output').textContent = result.markdown || result.result?.markdown || JSON.stringify(result.result ?? result, null, 2);
-      notify('Modulo generado');
+      if (result.jobId) {
+        renderAssistantLog(result.jobId);
+        notify(`Modulo job iniciado: ${result.jobId}`);
+        return;
+      }
+      renderAssistantOutput(result);
+      notify('Asistente generado');
     } catch (err) {
-      $('#module-output').textContent = `[error] ${err.message}`;
+      $('#module-output').classList.remove('job-log', 'running');
+      $('#module-output').innerHTML = `<div class="assistant-error">Error: ${escapeHtml(err.message)}</div>`;
       notify(err.message, 'error');
     }
   });

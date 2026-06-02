@@ -216,41 +216,41 @@ function renderHome() {
   $('#metrics').innerHTML = [
     ['Aplicaciones', m.total ?? 0],
     ['Activas', m.active ?? 0],
-    ['Top >=4', m.top ?? 0],
-    ['Pipeline', pending],
+    ['Alta >=4', m.top ?? 0],
+    ['Cola', pending],
     ['Trabajos vivos', activeJobs],
   ].map(([label, value]) => `<button class="metric" data-home-metric="${escapeHtml(label)}"><strong>${value}</strong><span>${label}</span></button>`).join('');
 
-  const top = state.applications.filter(app => app.score >= 4 && app.status === 'Evaluated').slice(0, 5);
+  const top = state.applications.filter(app => app.score >= 4 && app.status === 'Evaluated').slice(0, 4);
   const low = state.applications.filter(app => typeof app.score === 'number' && app.score < 4 && app.status === 'Evaluated').slice(0, 3);
-  const pendingItems = state.pipeline.filter(item => !item.done).slice(0, 5);
-  const items = [
-    ...top.map(app => priorityApp(app, 'Lista para decidir')),
-    ...pendingItems.map(item => priorityPipeline(item)),
-    ...low.map(app => priorityApp(app, 'Score bajo: recomienda descartar')),
-  ];
-  $('#priority-list').innerHTML = items.join('') || `<div class="empty-state"><span class="empty-icon">◇</span><span class="empty-title">Sin acciones urgentes</span><span class="empty-subtitle">Buen momento para escanear portales o revisar patrones.</span></div>`;
+  const pendingItems = state.pipeline.filter(item => !item.done).slice(0, 4);
+  const actions = [
+    ...top.map(app => nextActionApp(app, 'Revisar candidatura', 'Alta afinidad: decide si merece CV y dossier.')),
+    ...pendingItems.map(item => nextActionPipeline(item)),
+    ...low.map(app => nextActionApp(app, 'Descartar o justificar', 'Score bajo: no aplicar salvo una razón estratégica fuerte.')),
+  ].slice(0, 7);
+  $('#priority-list').innerHTML = actions.join('') || `<div class="empty-state"><span class="empty-icon">◇</span><span class="empty-title">Sin acciones urgentes</span><span class="empty-subtitle">Buen momento para escanear portales o revisar patrones.</span></div>`;
   renderFollowupSummary();
 }
 
-function priorityApp(app, label) {
+function nextActionApp(app, action, reason) {
   return `
     <button class="decision-item" data-select-app="${app.number}" data-jump="tracker">
       <span class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</span>
-      <strong>${escapeHtml(app.company)}</strong>
-      <span>${escapeHtml(app.role)}</span>
-      <em>${escapeHtml(label)}</em>
+      <strong>${escapeHtml(action)}</strong>
+      <span>${escapeHtml(app.company)} · ${escapeHtml(app.role)}</span>
+      <em>${escapeHtml(reason)}</em>
     </button>
   `;
 }
 
-function priorityPipeline(item) {
+function nextActionPipeline(item) {
   return `
     <button class="decision-item" data-select-pipeline="${item.id}" data-jump="opportunities">
       <span class="score-pill">URL</span>
-      <strong>${escapeHtml(item.company || item.sourceHost || 'Pipeline')}</strong>
-      <span>${escapeHtml(item.role || item.url)}</span>
-      <em>Pendiente de evaluación</em>
+      <strong>Evaluar oportunidad</strong>
+      <span>${escapeHtml(item.company || item.sourceHost || 'Cola')} · ${escapeHtml(item.role || item.url)}</span>
+      <em>Pendiente de scoring, legitimidad y siguiente decisión.</em>
     </button>
   `;
 }
@@ -271,19 +271,34 @@ function renderFollowupSummary() {
 
 function extractFollowupItems(data) {
   const items = [];
+  const pushEntry = (entry, fallbackUrgency = 'upcoming') => {
+    const raw = String(entry.urgency || entry.status || '').toLowerCase();
+    const urgency = raw === 'overdue' || entry.daysUntilNext < 0
+      ? 'overdue'
+      : raw === 'urgent' || raw === 'due' || entry.daysUntilNext === 0
+        ? 'due'
+        : fallbackUrgency;
+    items.push({ ...entry, urgency });
+  };
   if (Array.isArray(data?.overdue)) {
-    data.overdue.forEach(f => items.push({ ...f, urgency: 'overdue' }));
+    data.overdue.forEach(f => pushEntry(f, 'overdue'));
   }
   if (Array.isArray(data?.due)) {
-    data.due.forEach(f => items.push({ ...f, urgency: 'due' }));
+    data.due.forEach(f => pushEntry(f, 'due'));
   }
   if (Array.isArray(data?.upcoming)) {
-    data.upcoming.forEach(f => items.push({ ...f, urgency: 'upcoming' }));
+    data.upcoming.forEach(f => pushEntry(f, 'upcoming'));
+  }
+  if (Array.isArray(data?.entries)) {
+    data.entries.forEach(f => pushEntry(f));
   }
   if (Array.isArray(data)) {
-    data.forEach(f => items.push({ ...f, urgency: f.overdue ? 'overdue' : (f.due ? 'due' : 'upcoming') }));
+    data.forEach(f => pushEntry(f, f.overdue ? 'overdue' : (f.due ? 'due' : 'upcoming')));
   }
-  return items;
+  return items.sort((a, b) => {
+    const rank = { overdue: 0, due: 1, upcoming: 2 };
+    return (rank[a.urgency] ?? 3) - (rank[b.urgency] ?? 3);
+  });
 }
 
 function renderFollowupItem(item) {
@@ -292,21 +307,22 @@ function renderFollowupItem(item) {
   const label = urgency === 'overdue' ? 'Vencido' : urgency === 'due' ? 'Pendiente' : 'Próximo';
   const company = item.company || item.Company || '';
   const role = item.role || item.Role || '';
-  const days = item.daysSinceContact || item.days || '';
-  const action = item.recommendedAction || item.action || item.nextAction || '';
+  const days = item.daysSinceLastFollowup ?? item.daysSinceApplication ?? item.daysSinceContact ?? item.days ?? '';
+  const nextDate = item.nextFollowupDate ? ` · próximo ${escapeHtml(item.nextFollowupDate)}` : '';
+  const action = item.recommendedAction || item.action || item.nextAction || (urgency === 'overdue' ? 'preparar seguimiento' : '');
   return `
     <div class="insight-item ${urgency}">
       <span class="insight-icon">${icon}</span>
       <div class="insight-body">
         <span class="insight-title">${escapeHtml(company)}${role ? ` — ${escapeHtml(role)}` : ''}</span>
-        <span class="insight-meta">${escapeHtml(label)}${days ? ` · ${days} días sin contacto` : ''}${action ? ` · ${escapeHtml(action)}` : ''}</span>
+        <span class="insight-meta">${escapeHtml(label)}${days !== '' && days !== null ? ` · ${escapeHtml(days)} días` : ''}${nextDate}${action ? ` · ${escapeHtml(action)}` : ''}</span>
       </div>
     </div>
   `;
 }
 
 /* ═══════════════════════════════════════════
-   OPPORTUNITIES (was Pipeline/Inbox)
+   OPORTUNIDADES
    ═══════════════════════════════════════════ */
 
 function renderOpportunities() {
@@ -359,13 +375,13 @@ function renderApplications() {
   });
   $('#applications-table').innerHTML = `
     <div class="table-head">
-      <span>#</span><span>Empresa / rol</span><span>Score</span><span>Estado</span><span>Decisión</span>
+      <span>#</span><span>Empresa / rol</span><span>Puntuación</span><span>Estado</span><span>Decisión</span>
     </div>
     ${rows.map(app => `
       <button class="table-row ${state.selected.kind === 'app' && String(state.selected.id) === String(app.number) ? 'selected' : ''}" data-select-app="${app.number}">
         <span data-label="#">${app.number}</span>
         <span data-label="Empresa / rol"><strong>${escapeHtml(app.company)}</strong><small>${escapeHtml(app.role)}</small></span>
-        <span data-label="Score"><em class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</em></span>
+        <span data-label="Puntuación"><em class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</em></span>
         <span data-label="Estado"><em class="chip">${escapeHtml(statusLabels[app.status] || app.status)}</em></span>
         <span data-label="Decisión">${app.score < 4 ? '<em class="chip bad">descartar</em>' : '<em class="chip good">revisar</em>'}</span>
       </button>
@@ -565,7 +581,7 @@ function renderDetail() {
     <h2>Decisión primero</h2>
     <p class="muted">Selecciona una oferta, una aplicación o un informe para ver acciones contextuales.</p>
     <div class="detail-stat"><strong>${state.pipeline.filter(i => !i.done).length}</strong><span>pendientes en oportunidades</span></div>
-    <div class="detail-stat"><strong>${state.applications.filter(a => a.score >= 4 && a.status === 'Evaluated').length}</strong><span>top pendientes de decidir</span></div>
+    <div class="detail-stat"><strong>${state.applications.filter(a => a.score >= 4 && a.status === 'Evaluated').length}</strong><span>alta prioridad pendientes de decidir</span></div>
   `;
 }
 
@@ -623,7 +639,7 @@ function renderApplicationDetail(box) {
     </select>
     <div class="detail-actions">
       ${app.reportPath ? `<button class="primary-btn" data-open-report-path="${escapeHtml(app.reportPath)}">Ver informe</button>` : ''}
-      <button class="ghost-btn" data-open-assistant="apply-assistant">Asistente candidatura</button>
+      <button class="ghost-btn" data-open-assistant="apply-assistant">Aplicar asistido</button>
       <button class="ghost-btn" data-open-assistant="interview-prep">Preparar entrevista</button>
       ${app.pdfPath ? `<a class="ghost-btn" href="/api/files?path=${encodeURIComponent(app.pdfPath)}" target="_blank">PDF</a>` : ''}
       ${app.jobUrl ? `<a class="ghost-btn" href="${escapeHtml(app.jobUrl)}" target="_blank" rel="noreferrer">Oferta</a>` : ''}
@@ -653,7 +669,7 @@ function renderReportDetail(box) {
     </dl>
     <div class="detail-actions">
       <button class="primary-btn" data-report-pdf="${escapeHtml(report.path)}">Generar PDF</button>
-      <button class="ghost-btn" data-open-assistant="apply-assistant">Asistente candidatura</button>
+      <button class="ghost-btn" data-open-assistant="apply-assistant">Aplicar asistido</button>
       <button class="ghost-btn" data-open-assistant="deep-research">Investigación</button>
       <button class="ghost-btn" data-open-assistant="interview-prep">Entrevista</button>
       ${report.url ? `<a class="ghost-btn" href="${escapeHtml(report.url)}" target="_blank" rel="noreferrer">Oferta</a>` : ''}
@@ -811,19 +827,19 @@ function renderPatternsInsight() {
 }
 
 /* ═══════════════════════════════════════════
-   STREAMING / JOBS
+   STREAMING / TRABAJOS
    ═══════════════════════════════════════════ */
 
 function streamJob(jobId, target) {
   const log = $(target);
-  log.textContent = `[job] ${jobId}\n`;
+  log.textContent = `[trabajo] ${jobId}\n`;
   const source = new EventSource(`/api/jobs/${jobId}/events`);
   source.onmessage = event => {
     const item = JSON.parse(event.data);
+    const stepEvent = normalizeStepEvent(item);
 
-    // Update pipeline progress checklist if step data present
-    if (item.step) {
-      updateProgressStep(item.step, item.type === 'error' ? 'failed' : (item.type === 'done' || item.type === 'completed' ? 'completed' : 'running'));
+    if (stepEvent) {
+      updateProgressStep(stepEvent.step, stepEvent.status);
     }
 
     log.textContent += `[${item.type}] ${item.line}\n`;
@@ -838,6 +854,21 @@ function streamJob(jobId, target) {
     source.close();
     notify('Conexión de eventos cerrada', 'warn');
   };
+}
+
+function normalizeStepEvent(item) {
+  let payload = item;
+  if (!payload.step && item.type === 'artifact') {
+    try {
+      payload = { ...item, ...JSON.parse(item.line) };
+    } catch {
+      payload = item;
+    }
+  }
+  if (!payload.step) return null;
+  const status = payload.status
+    || (item.type === 'error' ? 'failed' : (item.type === 'done' || item.type === 'completed' ? 'completed' : 'running'));
+  return { step: payload.step, status };
 }
 
 function streamReturnedJob(result, target) {
@@ -899,10 +930,10 @@ function renderKeywordCoverage(keywords = [], sourceText = '') {
   box.innerHTML = `
     <div class="coverage-summary">
       <strong>${covered}/${rows.length || 0}</strong>
-      <span>keywords cubiertos en cv.md</span>
+      <span>palabras clave cubiertas en cv.md</span>
     </div>
     <div class="keyword-list">
-      ${rows.map(row => `<span class="${row.inCv ? 'covered' : 'missing'}">${escapeHtml(row.word)}</span>`).join('') || '<span class="muted">Genera un CV para ver keywords.</span>'}
+      ${rows.map(row => `<span class="${row.inCv ? 'covered' : 'missing'}">${escapeHtml(row.word)}</span>`).join('') || '<span class="muted">Genera un CV para ver palabras clave.</span>'}
     </div>
   `;
 }
@@ -970,7 +1001,7 @@ function renderAssistantOutput(result) {
 function renderAssistantLog(jobId) {
   const box = $('#module-output');
   box.classList.add('job-log', 'running');
-  box.textContent = `[job] ${jobId}\n`;
+  box.textContent = `[trabajo] ${jobId}\n`;
   const source = new EventSource(`/api/jobs/${jobId}/events`);
   source.onmessage = event => {
     const item = JSON.parse(event.data);
@@ -1022,16 +1053,16 @@ function fillEvaluateFromPipeline(id) {
 
 async function updatePipeline(id, patch) {
   await api(`/api/pipeline/${id}`, { method: 'PATCH', body: patch });
-  notify('Pipeline actualizado');
+  notify('Cola actualizada');
   await loadAll();
 }
 
 async function deletePipeline(id) {
   const item = state.pipeline.find(row => row.id === String(id));
-  if (!item || !confirm(`¿Eliminar del pipeline?\n\n${item.company || item.url}`)) return;
+  if (!item || !confirm(`¿Eliminar de oportunidades?\n\n${item.company || item.url}`)) return;
   await api(`/api/pipeline/${id}`, { method: 'DELETE' });
   state.selected = { kind: 'pipeline', id: null };
-  notify('Entrada eliminada del pipeline');
+  notify('Entrada eliminada de oportunidades');
   await loadAll();
 }
 
@@ -1047,7 +1078,7 @@ async function verifyPipeline(id) {
   state.liveness[id] = { result: 'verificando' };
   renderDetail();
   state.liveness[id] = await api('/api/jobs/liveness', { method: 'POST', body: { url: item.url } });
-  notify(`Liveness: ${state.liveness[id].result}`);
+  notify(`Vigencia: ${state.liveness[id].result}`);
   renderDetail();
 }
 
@@ -1188,7 +1219,7 @@ function wireEvents() {
     event.preventDefault();
     const body = Object.fromEntries(new FormData(event.currentTarget));
     if (!String(body.url || '').trim() && !String(body.jdText || '').trim()) {
-      $('#evaluate-log').textContent = '[error] Pega un JD o indica una URL.';
+      $('#evaluate-log').textContent = '[error] Pega una descripción o indica una URL.';
       return;
     }
     try {
@@ -1203,14 +1234,14 @@ function wireEvents() {
   $('#auto-pipeline-btn').addEventListener('click', async () => {
     const body = Object.fromEntries(new FormData($('#evaluate-form')));
     if (!String(body.url || '').trim() && !String(body.jdText || '').trim()) {
-      $('#evaluate-log').textContent = '[error] Pega un JD o indica una URL.';
+      $('#evaluate-log').textContent = '[error] Pega una descripción o indica una URL.';
       return;
     }
     resetProgressChecklist();
     try {
       const result = await api('/api/jobs/auto-pipeline', { method: 'POST', body });
       streamReturnedJob(result, '#evaluate-log');
-      notify(`Auto-pipeline iniciado: ${result.jobId}`);
+      notify(`Flujo completo iniciado: ${result.jobId}`);
     } catch (err) {
       $('#evaluate-log').textContent = `[error] ${err.message}`;
       notify(err.message, 'error');
@@ -1275,7 +1306,7 @@ function wireEvents() {
     try {
       const result = await api('/api/jobs/liveness-bulk', { method: 'POST', body: { urls } });
       streamReturnedJob(result, '#batch-log');
-      notify(`Liveness iniciado: ${result.jobId}`);
+      notify(`Verificación de vigencia iniciada: ${result.jobId}`);
     } catch (err) {
       $('#batch-log').textContent = `[error] ${err.message}`;
       notify(err.message, 'error');

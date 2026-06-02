@@ -476,7 +476,7 @@ function createJob(kind, command, args, options = {}) {
       job.status = 'cancelled';
       job.endedAt = new Date().toISOString();
       job.child?.kill('SIGTERM');
-      push('error', 'Job cancelado por el usuario');
+      push('error', 'Trabajo cancelado por el usuario');
       finish('cancelled', null);
       return true;
     },
@@ -575,7 +575,7 @@ function createInlineJob(kind, work, options = {}) {
       if (job.status !== 'running') return false;
       job.status = 'cancelled';
       job.endedAt = new Date().toISOString();
-      push('error', 'Job cancelado por el usuario');
+      push('error', 'Trabajo cancelado por el usuario');
       finish('cancelled', null);
       return true;
     },
@@ -816,8 +816,8 @@ function updateLanguageConfig(modesDir) {
   return { modesDir };
 }
 
-function buildCvHtml({ title = 'Career-Ops CV Draft', jdText = '', report = null } = {}) {
-  return renderCvTemplate(ROOT, { title, jdText, report });
+function buildCvHtml({ title = 'Career-Ops CV Draft', jdText = '', report = null, format = 'a4' } = {}) {
+  return renderCvTemplate(ROOT, { title, jdText, report, format });
 }
 
 function buildApplyAssistant(body) {
@@ -974,7 +974,8 @@ function stepStates(names) {
 
 function setStep(push, steps, step, status, extra = {}) {
   steps[step] = status;
-  push('artifact', JSON.stringify({ step, status, steps, ...extra }));
+  const payload = { step, status, steps, ...extra };
+  push('artifact', JSON.stringify(payload), payload);
 }
 
 async function handleApi(req, res, url) {
@@ -1004,7 +1005,7 @@ async function handleApi(req, res, url) {
       metrics,
       priorities: {
         topApps: topApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'Lista para decidir' })),
-        lowApps: lowApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'Score bajo: recomienda descartar' })),
+        lowApps: lowApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'Puntuación baja: recomienda descartar' })),
         pendingPipeline: pendingPipeline.map(p => ({ id: p.id, url: p.url, company: p.company, role: p.role, sourceHost: p.sourceHost, action: 'Pendiente de evaluación' })),
       },
       health: { ok: Object.values(checks).every(Boolean), checks },
@@ -1180,7 +1181,7 @@ async function handleApi(req, res, url) {
   if (pipelineMatch && (req.method === 'PATCH' || req.method === 'DELETE')) {
     const idx = Number(pipelineMatch[1]);
     const { entries } = parsePipeline();
-    if (!entries[idx]) return json(res, 404, { error: 'Entrada del pipeline no encontrada' });
+    if (!entries[idx]) return json(res, 404, { error: 'Entrada de oportunidades no encontrada' });
     if (req.method === 'DELETE') entries.splice(idx, 1);
     if (req.method === 'PATCH') {
       const body = await parseJsonBody(req);
@@ -1301,7 +1302,7 @@ async function handleApi(req, res, url) {
     const body = await parseJsonBody(req);
     let jdText = String(body.jdText || '').trim();
     const sourceUrl = String(body.url || '').trim();
-    if (!jdText && !sourceUrl) return json(res, 400, { error: 'Pega un JD o indica una URL.' });
+    if (!jdText && !sourceUrl) return json(res, 400, { error: 'Pega una descripción o indica una URL.' });
     if (!jdText && sourceUrl) jdText = await extractJobText(sourceUrl);
     mkdirSync(path.join(ROOT, 'jds'), { recursive: true });
     const name = `${new Date().toISOString().slice(0, 10)}-${slugify(body.title || sourceUrl)}-${Date.now()}.txt`;
@@ -1330,14 +1331,14 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/jobs/cv-pdf') {
     const body = await parseJsonBody(req);
     const report = body.reportId ? readReportById(String(body.reportId)) : null;
-    const cvDraft = buildCvHtml({ title: body.title, jdText: body.jdText, report });
+    const format = ['a4', 'letter'].includes(String(body.format)) ? String(body.format) : 'a4';
+    const cvDraft = buildCvHtml({ title: body.title, jdText: body.jdText, report, format });
     mkdirSync(path.join(ROOT, 'output'), { recursive: true });
     const today = new Date().toISOString().slice(0, 10);
     const base = `cv-${slugify(body.company || report?.company || body.title || 'draft')}-${today}`;
     const htmlRel = `output/${base}.html`;
     const pdfRel = `output/${base}.pdf`;
     writeFileSync(path.join(ROOT, htmlRel), cvDraft.html, 'utf-8');
-    const format = ['a4', 'letter'].includes(String(body.format)) ? String(body.format) : 'a4';
     const job = createJob('cv-pdf', process.execPath, ['generate-pdf.mjs', htmlRel, pdfRel, `--format=${format}`], {
       async onClose(code, jobRecord, push) {
         if (code === 0 && existsSync(path.join(ROOT, pdfRel))) {
@@ -1377,10 +1378,10 @@ async function handleApi(req, res, url) {
         }
       } else {
         setStep(push, steps, 'url-guard', 'completed', { url: null });
-        setStep(push, steps, 'liveness', 'partial', { reason: 'No URL supplied' });
+        setStep(push, steps, 'liveness', 'partial', { reason: 'No se indicó URL' });
         setStep(push, steps, 'jd-extraction', jdText ? 'completed' : 'failed', { trust: extractionTrust });
       }
-      if (!jdText) throw new Error('Pega un JD o indica una URL.');
+      if (!jdText) throw new Error('Pega una descripción o indica una URL.');
       mkdirSync(path.join(ROOT, 'jds'), { recursive: true });
       const name = `${new Date().toISOString().slice(0, 10)}-${slugify(body.title || sourceUrl || 'job')}-${Date.now()}.txt`;
       const rel = `jds/${name}`;
@@ -1397,14 +1398,14 @@ async function handleApi(req, res, url) {
       if (evaluation.stderr) push('warning', evaluation.stderr);
       if (!evaluation.ok) {
         setStep(push, steps, 'evaluation', 'failed');
-        throw new Error(evaluation.error || 'Evaluation failed');
+        throw new Error(evaluation.error || 'La evaluación ha fallado');
       }
       setStep(push, steps, 'evaluation', body.mock ? 'partial' : 'completed', { trust: body.mock ? 'untrusted-mock' : extractionTrust });
 
       setStep(push, steps, 'tracker-merge', 'running');
       const merge = await commandText(process.execPath, ['merge-tracker.mjs']);
       if (merge.stdout) push('progress', merge.stdout);
-      if (!merge.ok) throw new Error(merge.error || 'Tracker merge failed');
+      if (!merge.ok) throw new Error(merge.error || 'La integración del tracker ha fallado');
       setStep(push, steps, 'tracker-merge', 'completed');
 
       const report = latestReportAfter(before);
@@ -1418,7 +1419,7 @@ async function handleApi(req, res, url) {
           setStep(push, steps, 'report-pdf', 'completed', { reportPdf: reportPdfRel });
         } else {
           setStep(push, steps, 'report-pdf', 'failed', { reportPdf: reportPdfRel });
-          push('warning', `Report PDF no verificado: ${reportPdfRel}`);
+          push('warning', `PDF del informe no verificado: ${reportPdfRel}`);
         }
 
         setStep(push, steps, 'cv-pdf', 'running');
@@ -1434,7 +1435,7 @@ async function handleApi(req, res, url) {
           setStep(push, steps, 'cv-pdf', 'completed', { htmlPath: htmlRel, cvPdf: pdfRel, coverage: cvDraft.coverage });
         } else {
           setStep(push, steps, 'cv-pdf', 'failed', { htmlPath: htmlRel, cvPdf: pdfRel, coverage: cvDraft.coverage });
-          push('warning', `CV PDF no verificado: ${pdfRel}`);
+          push('warning', `PDF del CV no verificado: ${pdfRel}`);
         }
 
         if ((report.score || 0) >= 4.5) {
@@ -1448,7 +1449,7 @@ async function handleApi(req, res, url) {
           setStep(push, steps, 'apply-draft', 'completed', { path: applyPath });
           push('artifact', JSON.stringify({ step: 'draft-answers', path: applyPath, draft: applyDraft.markdown }));
         } else {
-          setStep(push, steps, 'apply-draft', 'partial', { reason: 'Score below 4.5' });
+          setStep(push, steps, 'apply-draft', 'partial', { reason: 'Puntuación por debajo de 4.5' });
         }
         push('artifact', JSON.stringify({ step: 'completed', report: report.path, reportPdf: reportPdfRel, cvPdf: pdfRel, steps }));
       } else {

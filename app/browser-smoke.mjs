@@ -59,7 +59,16 @@ try {
 
   await page.goto(base, { waitUntil: 'networkidle' });
   await page.locator('.safety-pill').waitFor();
-  assert((await page.locator('.safety-pill').textContent()).includes('No submit/send/apply automatico'), 'app-level no-submit safety banner is missing');
+  assert((await page.locator('.safety-pill').textContent()).includes('No envía ni aplica automáticamente'), 'app-level no-submit safety banner is missing');
+  const followups = await page.evaluate(async () => {
+    const res = await fetch('/api/followups');
+    return res.ok ? res.json() : null;
+  });
+  const followupEntries = followups?.data?.entries || followups?.entries || [];
+  if (followupEntries.length) {
+    const homeText = await page.locator('#followup-summary').textContent();
+    assert(homeText.includes(followupEntries[0].company), 'home follow-up summary hides API entries');
+  }
   await page.locator('[data-view="dossier"]').click();
   await page.locator('#module-form').waitFor();
   assert((await page.locator('#module-form').textContent()).includes('Generar asistente'), 'assistant CTA copy is missing');
@@ -77,7 +86,7 @@ try {
   await page.locator('#evaluate-url').fill('');
   await page.locator('#evaluate-jd').fill('');
   await page.locator('#auto-pipeline-btn').click();
-  await page.waitForFunction(() => document.querySelector('#evaluate-log')?.textContent?.includes('Pega un JD o indica una URL.'));
+  await page.waitForFunction(() => document.querySelector('#evaluate-log')?.textContent?.includes('Pega una descripción o indica una URL.'));
   assert(autoPipelineRequests.length === 0, 'empty auto-pipeline click dispatched a job request');
   console.log('ok browser auto-pipeline empty-input guard');
 
@@ -108,7 +117,16 @@ try {
   console.log('ok browser navigation sections');
 
   // Verify no visible key English words remain in the UI
-  const forbiddenPhrases = ['Command Center', 'Batch control room', 'Draft only', 'Assisted mode'];
+  const forbiddenPhrases = [
+    'Command Center',
+    'Batch control room',
+    'Draft only',
+    'Assisted mode',
+    'No submit/send/apply',
+    'Liveness',
+    'Merge tracker',
+    'System Layer',
+  ];
   const bodyText = await page.locator('body').innerText();
   for (const phrase of forbiddenPhrases) {
     assert(!bodyText.includes(phrase), `UI body contains English phrase: "${phrase}"`);

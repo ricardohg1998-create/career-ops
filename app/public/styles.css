@@ -437,7 +437,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 
 .decision-item {
   display: grid;
-  grid-template-columns: 82px 1fr 1.2fr 1fr;
+  grid-template-columns: 82px minmax(150px, .8fr) minmax(220px, 1.3fr) minmax(240px, 1fr);
   gap: 10px;
   align-items: center;
 }
@@ -1248,7 +1248,7 @@ dialog::backdrop { background: rgba(20, 18, 13, .45); }
   }
   .table-row > *:nth-child(1)::before { content: "#"; }
   .table-row > *:nth-child(2)::before { content: "Oferta"; }
-  .table-row > *:nth-child(3)::before { content: "Score"; }
+  .table-row > *:nth-child(3)::before { content: "Puntuación"; }
   .table-row > *:nth-child(4)::before { content: "Estado"; }
   .table-row > *:nth-child(5)::before { content: "Decisión"; }
   .table-row > *[data-label]::before { content: attr(data-label); }

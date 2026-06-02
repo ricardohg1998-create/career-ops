@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { renderCvTemplate } from './lib/cv-workspace.mjs';
 
 const port = process.env.CAREER_OPS_APP_SMOKE_PORT || '4174';
 const base = `http://127.0.0.1:${port}`;
@@ -101,8 +102,35 @@ async function assertMockAutoPipelineFixture() {
   console.log('ok auto-pipeline mock fixture (--no-save)');
 }
 
+function assertOpenCodeLanguagePolicy() {
+  const source = readFileSync('opencode-eval.mjs', 'utf-8');
+  assert(!source.includes('Generate Blocks A through G in full, in English'), 'opencode evaluator still forces English internal reports');
+  assert(source.includes('internal evaluation report') && source.includes('language.modes_dir'), 'opencode evaluator does not document localized internal report language');
+  console.log('ok opencode localized report language policy');
+}
+
+function assertCvRendererPolicy() {
+  const draft = renderCvTemplate(process.cwd(), {
+    title: 'CV smoke test',
+    jdText: 'Head of Growth Marketing MarTech CRM funnels automation',
+    format: 'a4',
+  });
+  const body = draft.html.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] || draft.html;
+  assertIncludes(body, 'Ricardo Huertas', 'cv renderer body');
+  assertIncludes(body, 'Perfil Profesional', 'cv renderer body');
+  assertIncludes(body, 'Competencias Clave', 'cv renderer body');
+  assertIncludes(body, 'Experiencia Profesional', 'cv renderer body');
+  assert(!body.includes('[object Object]'), 'cv renderer leaked object values into visible HTML');
+  assert(!body.includes('TARGETED KEYWORDS'), 'cv renderer leaked old English keyword label');
+  assert(!body.includes('>Professional Summary<'), 'cv renderer did not localize summary label');
+  assert(!body.includes('**'), 'cv renderer left raw markdown emphasis in visible HTML');
+  console.log('ok localized cv renderer policy');
+}
+
 try {
   await waitForServer();
+  assertOpenCodeLanguagePolicy();
+  assertCvRendererPolicy();
   await assertOk('/api/health', data => typeof data.ok === 'boolean');
   await assertOk('/api/dashboard', data => data.ok && data.metrics && data.priorities && data.health);
   await assertOk('/api/next-actions', data => data.ok && Array.isArray(data.actions));

@@ -108,3 +108,7 @@ The `dashboard/` directory contains a standalone Go TUI application that visuali
 - Grouped/flat view
 - Lazy-loaded report previews
 - Inline status picker
+
+## Visual Product Direction
+
+The web interface in `app/` should evolve as a local decision center rather than a generic dashboard. See [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md) for the North Star, UX principles, decision model, and roadmap for the visual experience.

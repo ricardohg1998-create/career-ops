@@ -122,6 +122,21 @@ if (modesDir) {
   }
 }
 
+function reportLanguageForModesDir(value) {
+  const normalized = String(value || '').replace(/\\/g, '/').toLowerCase();
+  if (normalized.endsWith('modes/es')) return 'Spanish';
+  if (normalized.endsWith('modes/de')) return 'German';
+  if (normalized.endsWith('modes/fr')) return 'French';
+  if (normalized.endsWith('modes/ja')) return 'Japanese';
+  if (normalized.endsWith('modes/tr')) return 'Turkish';
+  if (normalized.endsWith('modes/pt')) return 'Portuguese';
+  if (normalized.endsWith('modes/ru')) return 'Russian';
+  if (normalized.endsWith('modes/ua')) return 'Ukrainian';
+  return 'English';
+}
+
+const internalReportLanguage = reportLanguageForModesDir(modesDir);
+
 // ---------------------------------------------------------------------------
 // CLI argument parsing
 // ---------------------------------------------------------------------------
@@ -411,7 +426,7 @@ IMPORTANT OPERATING RULES FOR THIS CLI SESSION
    - For Block D (Comp research): provide salary estimates based on your training data, clearly noted as estimates.
    - For Block G (Legitimacy): analyze the JD text only; skip URL/page freshness checks.
    - Post-evaluation file saving is handled by the script, not by you.
-2. Generate Blocks A through G in full, in English, unless the JD is in another language.
+2. Generate the internal evaluation report (Blocks A through G, scoring, risks, and recommendation) in ${internalReportLanguage}. This is controlled by config/profile.yml language.modes_dir and overrides the JD language for internal reports.
 3. BE EXTREMELY BRIEF AND CONCISE. Do not write long paragraphs or extensive tables. Keep every section limited to 1-3 short bullet points. Avoid wordy explanations. Limit the Interview Plan (Block F) to exactly 2 very short STAR+R stories. This is critical to avoid output token limits.
 4. At the very end, output a machine-readable summary block in this exact format:
 

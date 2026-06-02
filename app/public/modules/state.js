@@ -63,12 +63,12 @@ export const modeLabels = {
 };
 
 export const stepLabels = {
-  'url-safe': 'URL segura',
-  'liveness': 'Liveness',
-  'jd-extract': 'Extracción JD',
-  'evaluate': 'Evaluación',
-  'merge': 'Merge tracker',
+  'url-guard': 'URL segura',
+  'liveness': 'Vigencia',
+  'jd-extraction': 'Extracción de descripción',
+  'evaluation': 'Evaluación',
+  'tracker-merge': 'Integración en registro',
   'report-pdf': 'PDF informe',
-  'cv-ats': 'CV ATS',
-  'draft-apply': 'Borrador candidatura',
+  'cv-pdf': 'CV ATS',
+  'apply-draft': 'Borrador candidatura',
 };

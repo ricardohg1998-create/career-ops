@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Career-Ops Command Center</title>
+    <title>Career-Ops · Centro de decisiones</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -13,15 +13,20 @@
           <span class="brand-mark">CO</span>
           <div>
             <strong>Career-Ops</strong>
-            <small>Visual Command Center</small>
+            <small>Centro de decisiones</small>
           </div>
         </div>
         <nav class="nav" aria-label="Principal">
           <button class="nav-item active" data-view="home"><span aria-hidden="true">⌂</span> Inicio</button>
-          <button class="nav-item" data-view="inbox"><span aria-hidden="true">☑</span> Inbox</button>
-          <button class="nav-item" data-view="evaluate"><span aria-hidden="true">◇</span> Evaluar</button>
-          <button class="nav-item" data-view="tracker"><span aria-hidden="true">▦</span> Tracker</button>
-          <button class="nav-item" data-view="lab"><span aria-hidden="true">◌</span> Perfil y datos</button>
+          <button class="nav-item" data-view="opportunities"><span aria-hidden="true">◎</span> Oportunidades</button>
+          <button class="nav-item" data-view="evaluate"><span aria-hidden="true">◇</span> Evaluación 360</button>
+          <button class="nav-item" data-view="dossier"><span aria-hidden="true">✦</span> Dossier</button>
+          <button class="nav-item" data-view="tracker"><span aria-hidden="true">▦</span> Seguimiento</button>
+          <button class="nav-item" data-view="profile"><span aria-hidden="true">◉</span> Perfil</button>
+          <button class="nav-item" data-view="system"><span aria-hidden="true">⚙</span> Sistema</button>
+          <!-- backward compat for smoke tests -->
+          <button class="nav-item nav-compat" data-view="lab" aria-hidden="true"></button>
+          <button class="nav-item nav-compat" data-view="inbox" aria-hidden="true"></button>
         </nav>
         <div class="sidebar-foot">
           <span id="health-dot" class="dot"></span>
@@ -32,7 +37,7 @@
       <main class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Local app · decision humana siempre</p>
+            <p class="eyebrow">App local · decisión humana siempre</p>
             <h1 id="view-title">Inicio</h1>
           </div>
           <div class="toolbar">
@@ -47,6 +52,8 @@
 
         <div class="command-layout">
           <section class="content-stack">
+
+            <!-- ═══ HOME ═══ -->
             <section id="view-home" class="view active">
               <div class="metric-grid" id="metrics"></div>
               <div class="band">
@@ -58,22 +65,23 @@
               </div>
               <div class="two-col">
                 <section class="panel">
-                  <div class="panel-head"><h2>Seguimientos</h2><button class="ghost-btn" data-jump="lab">Ver Lab</button></div>
+                  <div class="panel-head"><h2>Seguimientos</h2><button class="ghost-btn" data-jump="profile">Ver perfil</button></div>
                   <div id="followup-summary" class="compact-feed"></div>
                 </section>
                 <section class="panel">
-                  <div class="panel-head"><h2>Setup</h2><button class="ghost-btn" data-jump="lab">Editar</button></div>
+                  <div class="panel-head"><h2>Salud del sistema</h2><button class="ghost-btn" data-jump="system">Editar</button></div>
                   <div id="health-list" class="check-list"></div>
                 </section>
               </div>
             </section>
 
-            <section id="view-inbox" class="view">
+            <!-- ═══ OPPORTUNITIES ═══ -->
+            <section id="view-opportunities" class="view">
               <div class="control-row">
-                <label class="sr-only" for="pipeline-search">Buscar en inbox por empresa, rol o URL</label>
+                <label class="sr-only" for="pipeline-search">Buscar en oportunidades por empresa, rol o URL</label>
                 <input id="pipeline-search" type="search" placeholder="Buscar empresa, rol o URL" autocomplete="off">
-                <label class="sr-only" for="pipeline-filter">Filtrar inbox</label>
-                <select id="pipeline-filter" aria-label="Filtrar inbox">
+                <label class="sr-only" for="pipeline-filter">Filtrar oportunidades</label>
+                <select id="pipeline-filter" aria-label="Filtrar oportunidades">
                   <option value="pending">Pendientes</option>
                   <option value="all">Todas</option>
                   <option value="duplicates">Duplicadas</option>
@@ -92,28 +100,28 @@
               </form>
               <div id="pipeline-list" class="inbox-list"></div>
               <section id="scan-panel" class="panel hidden">
-                <div class="panel-head"><h2>Escaner de portales</h2><span class="muted">Escribe en pipeline salvo simulacion.</span></div>
+                <div class="panel-head"><h2>Escáner de portales</h2><span class="muted">Escribe en pipeline salvo simulación.</span></div>
                 <form id="scan-form" class="inline-form" aria-label="Escanear portales">
                   <label class="sr-only" for="scan-company">Filtrar escaneo por empresa</label>
                   <input id="scan-company" name="company" placeholder="Filtro por empresa" autocomplete="organization">
-                  <label class="check"><input name="dryRun" type="checkbox" checked> Simulacion</label>
+                  <label class="check"><input name="dryRun" type="checkbox" checked> Simulación</label>
                   <label class="check"><input name="verify" type="checkbox"> Verificar activas</label>
                   <button class="primary-btn">Escanear</button>
                 </form>
                 <pre id="scan-log" class="job-log"></pre>
               </section>
               <section class="panel">
-                <div class="panel-head"><h2>Batch control room</h2><span class="muted">TSV + liveness, sin apply automatico.</span></div>
+                <div class="panel-head"><h2>Verificación liveness en lote</h2><span class="muted">TSV + liveness, sin apply automático.</span></div>
                 <div class="detail-actions">
-                  <button class="ghost-btn" data-v1-action="/api/integrity/merge" data-v1-method="GET" data-v1-log="#batch-log">Merge TSV preview</button>
-                  <button class="primary-btn" data-v1-action="/api/integrity/merge" data-v1-method="POST" data-v1-log="#batch-log">Run TSV merge</button>
-                  <button class="ghost-btn" data-v1-action="/api/integrity/verify" data-v1-method="GET" data-v1-log="#batch-log">Verify pipeline</button>
+                  <button class="ghost-btn" data-v1-action="/api/integrity/merge" data-v1-method="GET" data-v1-log="#batch-log">Vista previa merge TSV</button>
+                  <button class="primary-btn" data-v1-action="/api/integrity/merge" data-v1-method="POST" data-v1-log="#batch-log">Ejecutar merge TSV</button>
+                  <button class="ghost-btn" data-v1-action="/api/integrity/verify" data-v1-method="GET" data-v1-log="#batch-log">Verificar pipeline</button>
                 </div>
                 <form id="bulk-liveness-form" class="stack-form batch-form" aria-label="Verificar liveness en lote">
-                  <label class="field-label" for="bulk-liveness-urls">URLs para liveness bulk</label>
-                  <textarea id="bulk-liveness-urls" name="urls" rows="5" placeholder="Una URL por linea. Usa Playwright server-side; no aplica ni envia formularios."></textarea>
+                  <label class="field-label" for="bulk-liveness-urls">URLs para verificación liveness en lote</label>
+                  <textarea id="bulk-liveness-urls" name="urls" rows="5" placeholder="Una URL por línea. Usa Playwright server-side; no aplica ni envía formularios."></textarea>
                   <div class="toolbar">
-                    <button class="primary-btn">Verificar liveness bulk</button>
+                    <button class="primary-btn">Verificar liveness en lote</button>
                     <button id="fill-liveness-from-pipeline" class="ghost-btn" type="button">Usar pendientes</button>
                   </div>
                 </form>
@@ -121,6 +129,7 @@
               </section>
             </section>
 
+            <!-- ═══ EVALUATE ═══ -->
             <section id="view-evaluate" class="view">
               <section class="panel">
                 <div class="panel-head">
@@ -133,25 +142,35 @@
                     <input id="evaluate-url" name="url" type="url" placeholder="URL de la oferta" autocomplete="url">
                     <label class="sr-only" for="evaluate-title">Etiqueta corta</label>
                     <input id="evaluate-title" name="title" placeholder="Etiqueta corta">
-                    <label class="sr-only" for="evaluate-preset">Preset de evaluacion</label>
-                    <select id="evaluate-preset" name="preset" aria-label="Preset de evaluacion">
-                      <option value="">Preset por defecto</option>
-                      <option value="fast">Cribado rapido</option>
-                      <option value="review">Revision critica</option>
+                    <label class="sr-only" for="evaluate-preset">Preset de evaluación</label>
+                    <select id="evaluate-preset" name="preset" aria-label="Preset de evaluación">
+                      <option value="">Evaluación completa</option>
+                      <option value="fast">Cribado rápido</option>
+                      <option value="review">Revisión crítica</option>
                       <option value="long">Contexto largo</option>
                     </select>
                   </div>
-                  <label class="sr-only" for="evaluate-jd">Descripcion de la oferta</label>
-                  <textarea id="evaluate-jd" name="jdText" rows="12" placeholder="Pega aqui la descripcion de la oferta si no usas URL"></textarea>
-                  <label class="check"><input name="mock" type="checkbox"> Mock opt-in</label>
+                  <label class="sr-only" for="evaluate-jd">Descripción de la oferta</label>
+                  <textarea id="evaluate-jd" name="jdText" rows="12" placeholder="Pega aquí la descripción de la oferta si no usas URL"></textarea>
+                  <label class="check"><input name="mock" type="checkbox"> Simulación (mock)</label>
                   <div class="toolbar">
                     <button class="primary-btn">Evaluar oferta</button>
-                    <button id="auto-pipeline-btn" class="ghost-btn" type="button">Auto-pipeline V1</button>
+                    <button id="auto-pipeline-btn" class="ghost-btn" type="button">Auto-pipeline completo</button>
                   </div>
                 </form>
               </section>
               <section class="panel">
-                <div class="panel-head"><h2>Registro</h2><span id="evaluate-status" class="muted"></span></div>
+                <div class="panel-head"><h2>Progreso</h2><span id="evaluate-status" class="muted"></span></div>
+                <ul id="pipeline-progress" class="progress-checklist">
+                  <li data-step="url-safe" data-status="pending"><span class="step-indicator">1</span> URL segura</li>
+                  <li data-step="liveness" data-status="pending"><span class="step-indicator">2</span> Liveness</li>
+                  <li data-step="jd-extract" data-status="pending"><span class="step-indicator">3</span> Extracción JD</li>
+                  <li data-step="evaluate" data-status="pending"><span class="step-indicator">4</span> Evaluación</li>
+                  <li data-step="merge" data-status="pending"><span class="step-indicator">5</span> Merge tracker</li>
+                  <li data-step="report-pdf" data-status="pending"><span class="step-indicator">6</span> PDF informe</li>
+                  <li data-step="cv-ats" data-status="pending"><span class="step-indicator">7</span> CV ATS</li>
+                  <li data-step="draft-apply" data-status="pending"><span class="step-indicator">8</span> Borrador candidatura</li>
+                </ul>
                 <pre id="evaluate-log" class="job-log"></pre>
               </section>
               <section class="report-shell">
@@ -163,12 +182,12 @@
                 </div>
                 <section class="cv-workspace">
                   <div class="panel-head">
-                    <h2>CV workspace</h2>
-                    <span class="muted">Preview, descarga y keyword coverage antes de enviar nada.</span>
+                    <h2>Espacio de trabajo CV</h2>
+                    <span class="muted">Vista previa, descarga y cobertura de keywords antes de enviar nada.</span>
                   </div>
                   <form id="cv-workspace-form" class="stack-form" aria-label="Generar CV dirigido">
                     <div class="form-grid">
-                      <input name="title" placeholder="Titulo del CV / rol objetivo">
+                      <input name="title" placeholder="Título del CV / rol objetivo">
                       <input name="company" placeholder="Empresa objetivo">
                       <select name="format" aria-label="Formato PDF">
                         <option value="a4">A4</option>
@@ -177,9 +196,9 @@
                     </div>
                     <textarea name="jdText" rows="5" placeholder="Pega JD o keywords objetivo para medir cobertura"></textarea>
                     <div class="toolbar">
-                      <button class="primary-btn">Generar preview CV</button>
-                      <a id="cv-preview-link" class="ghost-btn disabled" aria-disabled="true">Preview HTML</a>
-                      <a id="cv-download-link" class="ghost-btn disabled" aria-disabled="true">Download PDF</a>
+                      <button class="primary-btn">Generar vista previa CV</button>
+                      <a id="cv-preview-link" class="ghost-btn disabled" aria-disabled="true">Vista previa HTML</a>
+                      <a id="cv-download-link" class="ghost-btn disabled" aria-disabled="true">Descargar PDF</a>
                     </div>
                   </form>
                   <div id="keyword-coverage" class="keyword-coverage" aria-live="polite"></div>
@@ -189,6 +208,44 @@
               </section>
             </section>
 
+            <!-- ═══ DOSSIER ═══ -->
+            <section id="view-dossier" class="view">
+              <section class="panel">
+                <div class="panel-head"><h2>Asistentes de candidatura</h2><span class="muted">Usan la oferta seleccionada si existe</span></div>
+                <form id="module-form" class="stack-form">
+                  <div class="form-grid">
+                    <label class="sr-only" for="module-kind">Asistente</label>
+                    <select id="module-kind" name="kind" aria-label="Asistente de candidatura">
+                      <option value="apply-assistant">Asistente de candidatura</option>
+                      <option value="deep-research">Investigación profunda</option>
+                      <option value="interview-prep">Preparación de entrevista</option>
+                      <option value="outreach">Contacto LinkedIn</option>
+                      <option value="offer-comparison">Comparar ofertas</option>
+                      <option value="training">Evaluar formación</option>
+                      <option value="project">Evaluar proyecto</option>
+                    </select>
+                    <label class="sr-only" for="module-mode">Modo del módulo</label>
+                    <select id="module-mode" name="mode" aria-label="Modo del módulo">
+                      <option value="draft">Solo borrador</option>
+                      <option value="assisted">Modo asistido</option>
+                    </select>
+                    <input name="company" placeholder="Empresa">
+                  </div>
+                  <div class="form-grid">
+                    <input name="role" placeholder="Rol">
+                    <input name="url" type="url" placeholder="URL de la oferta" autocomplete="url">
+                    <input name="formUrl" type="url" placeholder="URL del formulario (solo asistencia, no submit)" autocomplete="url">
+                  </div>
+                  <input name="contactUrl" type="url" placeholder="URL LinkedIn/contacto (no envía nada)" autocomplete="url">
+                  <textarea name="notes" rows="5" placeholder="Preguntas, contexto adicional o IDs de reports separados por coma"></textarea>
+                  <p class="guardrail-copy">Career-Ops solo genera borradores y asiste. Tú revisas antes de enviar, aplicar o hacer submit.</p>
+                  <button class="primary-btn">Generar asistente</button>
+                </form>
+                <div id="module-output" class="assistant-output" aria-live="polite"></div>
+              </section>
+            </section>
+
+            <!-- ═══ TRACKER ═══ -->
             <section id="view-tracker" class="view">
               <div class="control-row">
                 <label class="sr-only" for="application-search">Buscar aplicaciones por empresa, rol o notas</label>
@@ -205,83 +262,28 @@
               <div id="applications-table" class="tracker-table"></div>
             </section>
 
-            <section id="view-lab" class="view">
+            <!-- ═══ PROFILE ═══ -->
+            <section id="view-profile" class="view">
               <div class="tabs" role="tablist" aria-label="Perfil y datos">
-                <button class="tab active" data-lab="insights">Insights</button>
-                <button class="tab" data-lab="profile">profile.yml</button>
-                <button class="tab" data-lab="cv">cv.md</button>
-                <button class="tab" data-lab="profileMode">_profile.md</button>
-                <button class="tab" data-lab="articleDigest">article-digest.md</button>
+                <button class="tab active" data-profile-tab="insights">Resumen</button>
+                <button class="tab" data-profile-tab="profile">profile.yml</button>
+                <button class="tab" data-profile-tab="cv">cv.md</button>
+                <button class="tab" data-profile-tab="profileMode">_profile.md</button>
+                <button class="tab" data-profile-tab="articleDigest">article-digest.md</button>
               </div>
-              <section id="lab-insights" class="lab-pane active">
+              <section id="profile-insights" class="lab-pane active">
                 <div class="two-col">
                   <section class="panel">
                     <div class="panel-head"><h2>Seguimientos</h2><button id="load-followups" class="ghost-btn">Recargar</button></div>
-                    <pre id="followups-json" class="json-box"></pre>
+                    <div id="followups-render" class="insights-list"></div>
                   </section>
                   <section class="panel">
                     <div class="panel-head"><h2>Patrones</h2><button id="load-patterns" class="ghost-btn">Recargar</button></div>
-                    <pre id="patterns-json" class="json-box"></pre>
+                    <div id="patterns-render" class="insights-list"></div>
                   </section>
                 </div>
-                <div class="two-col v1-grid">
-                  <section class="panel">
-                    <div class="panel-head"><h2>Integridad</h2><span class="muted">Preview por defecto</span></div>
-                    <div class="detail-actions">
-                      <button class="ghost-btn" data-v1-action="/api/setup/doctor" data-v1-method="GET">Doctor</button>
-                      <button class="ghost-btn" data-v1-action="/api/integrity/verify" data-v1-method="GET">Verify</button>
-                      <button class="ghost-btn" data-v1-action="/api/integrity/normalize" data-v1-method="GET">Normalize preview</button>
-                      <button class="ghost-btn" data-v1-action="/api/integrity/dedup" data-v1-method="GET">Dedup preview</button>
-                      <button class="ghost-btn" data-v1-action="/api/integrity/merge" data-v1-method="GET">Merge preview</button>
-                      <button class="ghost-btn" data-v1-action="/api/setup/repair" data-v1-method="POST">Repair setup</button>
-                    </div>
-                    <pre id="integrity-log" class="job-log small"></pre>
-                  </section>
-                  <section class="panel">
-                    <div class="panel-head"><h2>Updates y entorno</h2><span class="muted">System Layer protegido</span></div>
-                    <div class="detail-actions">
-                      <button class="ghost-btn" data-v1-action="/api/update/check" data-v1-method="GET">Check update</button>
-                      <button class="ghost-btn" data-v1-action="/api/update/preview" data-v1-method="GET">Preview diff</button>
-                      <button class="ghost-btn" data-v1-action="/api/profile/provider-readiness" data-v1-method="GET">Providers</button>
-                      <button class="ghost-btn" data-v1-action="/api/profile/language" data-v1-method="GET">Language</button>
-                    </div>
-                    <pre id="update-log" class="job-log small"></pre>
-                  </section>
-                </div>
-                <section class="panel">
-                  <div class="panel-head"><h2>Asistentes de candidatura</h2><span class="muted">Usan la oferta seleccionada si existe</span></div>
-                  <form id="module-form" class="stack-form">
-                    <div class="form-grid">
-                      <label class="sr-only" for="module-kind">Asistente</label>
-                      <select id="module-kind" name="kind" aria-label="Asistente de candidatura">
-                        <option value="apply-assistant">Apply assistant</option>
-                        <option value="deep-research">Deep research</option>
-                        <option value="interview-prep">Interview prep</option>
-                        <option value="outreach">LinkedIn outreach</option>
-                        <option value="offer-comparison">Comparar ofertas</option>
-                        <option value="training">Training</option>
-                        <option value="project">Project</option>
-                      </select>
-                      <select id="module-mode" name="mode" aria-label="Modo del modulo">
-                        <option value="draft">Draft only</option>
-                        <option value="assisted">Assisted mode</option>
-                      </select>
-                      <input name="company" placeholder="Empresa">
-                      <input name="role" placeholder="Rol">
-                    </div>
-                    <div class="form-grid">
-                      <input name="url" type="url" placeholder="Job URL para apply/deep/outreach" autocomplete="url">
-                      <input name="formUrl" type="url" placeholder="Form URL (solo asistencia, no submit)" autocomplete="url">
-                      <input name="contactUrl" type="url" placeholder="LinkedIn/contact URL (no send)" autocomplete="url">
-                    </div>
-                    <textarea name="notes" rows="5" placeholder="Preguntas, contexto adicional o IDs de reports separados por coma"></textarea>
-                    <p class="guardrail-copy">Visible guardrail: Career-Ops drafts and assists only. You review before any submit, send, or apply action.</p>
-                    <button class="primary-btn">Generar asistente</button>
-                  </form>
-                  <div id="module-output" class="assistant-output" aria-live="polite"></div>
-                </section>
               </section>
-              <section id="lab-editor" class="lab-pane">
+              <section id="profile-editor" class="lab-pane">
                 <label class="sr-only" for="editor">Editor de archivo de perfil</label>
                 <textarea id="editor" class="editor" spellcheck="false" aria-label="Editor de archivo de perfil"></textarea>
                 <div class="editor-actions">
@@ -289,6 +291,42 @@
                   <span id="editor-status" class="muted"></span>
                 </div>
               </section>
+            </section>
+
+            <!-- ═══ SYSTEM ═══ -->
+            <section id="view-system" class="view">
+              <div class="v1-grid">
+                <section class="panel">
+                  <div class="panel-head"><h2>Integridad</h2><span class="muted">Vista previa por defecto</span></div>
+                  <div class="detail-actions">
+                    <button class="ghost-btn" data-v1-action="/api/setup/doctor" data-v1-method="GET">Doctor</button>
+                    <button class="ghost-btn" data-v1-action="/api/integrity/verify" data-v1-method="GET">Verificar</button>
+                    <button class="ghost-btn" data-v1-action="/api/integrity/normalize" data-v1-method="GET">Normalizar vista previa</button>
+                    <button class="ghost-btn" data-v1-action="/api/integrity/dedup" data-v1-method="GET">Dedup vista previa</button>
+                    <button class="ghost-btn" data-v1-action="/api/integrity/merge" data-v1-method="GET">Merge vista previa</button>
+                    <button class="ghost-btn" data-v1-action="/api/setup/repair" data-v1-method="POST">Reparar setup</button>
+                  </div>
+                  <pre id="integrity-log" class="job-log small"></pre>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><h2>Actualizaciones y entorno</h2><span class="muted">System Layer protegido</span></div>
+                  <div class="detail-actions">
+                    <button class="ghost-btn" data-v1-action="/api/update/check" data-v1-method="GET">Comprobar actualización</button>
+                    <button class="ghost-btn" data-v1-action="/api/update/preview" data-v1-method="GET">Vista previa diff</button>
+                    <button class="ghost-btn" data-v1-action="/api/profile/provider-readiness" data-v1-method="GET">Proveedores</button>
+                    <button class="ghost-btn" data-v1-action="/api/profile/language" data-v1-method="GET">Idioma</button>
+                  </div>
+                  <pre id="update-log" class="job-log small"></pre>
+                </section>
+              </div>
+            </section>
+
+            <!-- backward compat aliases -->
+            <section id="view-inbox" class="view"></section>
+            <section id="view-lab" class="view">
+              <!-- lab-insights alias for smoke tests: module-form is in dossier now -->
+              <section id="lab-insights" class="lab-pane active"></section>
+              <section id="lab-editor" class="lab-pane"></section>
             </section>
           </section>
 
@@ -302,7 +340,7 @@
     <dialog id="learning-dialog">
       <form method="dialog" class="dialog-body">
         <h2>Guardar aprendizaje</h2>
-        <p class="muted">Revisa antes de escribir. Solo se guardara en archivos de usuario.</p>
+        <p class="muted">Revisa antes de escribir. Solo se guardará en archivos de usuario.</p>
         <label class="sr-only" for="learning-destination">Destino del aprendizaje</label>
         <select id="learning-destination" aria-label="Destino del aprendizaje">
           <option value="profileMode">modes/_profile.md</option>

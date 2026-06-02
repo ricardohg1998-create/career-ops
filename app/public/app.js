@@ -1,17 +1,25 @@
 import { api } from './modules/api.js';
-import { state, statusLabels, viewTitles } from './modules/state.js';
+import { state, statusLabels, viewTitles, moduleLabels, modeLabels, stepLabels } from './modules/state.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+/* ═══════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════ */
+
 function notify(message, type = 'ok') {
   const box = $('#mutation-feedback');
   if (!box) return;
-  box.textContent = message;
-  box.dataset.type = type;
-  box.classList.add('visible');
+  const el = document.createElement('div');
+  el.textContent = message;
+  el.dataset.type = type;
+  box.appendChild(el);
   clearTimeout(notify.timer);
-  notify.timer = setTimeout(() => box.classList.remove('visible'), 3200);
+  notify.timer = setTimeout(() => {
+    el.classList.add('fade-out');
+    setTimeout(() => el.remove(), 400);
+  }, 3200);
 }
 
 function fatal(message) {
@@ -112,16 +120,34 @@ function scoreClass(score) {
   return '';
 }
 
+/* ═══════════════════════════════════════════
+   NAVIGATION
+   ═══════════════════════════════════════════ */
+
+const viewAliases = { inbox: 'opportunities', lab: 'dossier' };
+
 function setView(name) {
-  state.view = name;
-  $$('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.view === name));
-  $$('.view').forEach(view => view.classList.toggle('active', view.id === `view-${name}`));
-  $('#view-title').textContent = viewTitles[name] || name;
-  if (name === 'home') state.selected = { kind: 'home', id: null };
-  if (name === 'inbox' && !state.selected.id) selectPipeline(state.pipeline.find(item => !item.done)?.id);
-  if (name === 'tracker' && state.selected.kind !== 'app') selectApplication(state.applications[0]?.number);
+  const resolved = viewAliases[name] || name;
+  state.view = resolved;
+  $$('.nav-item').forEach(btn => {
+    const btnView = viewAliases[btn.dataset.view] || btn.dataset.view;
+    btn.classList.toggle('active', btnView === resolved);
+  });
+  $$('.view').forEach(view => {
+    const viewId = view.id.replace('view-', '');
+    const resolvedId = viewAliases[viewId] || viewId;
+    view.classList.toggle('active', resolvedId === resolved);
+  });
+  $('#view-title').textContent = viewTitles[resolved] || resolved;
+  if (resolved === 'home') state.selected = { kind: 'home', id: null };
+  if (resolved === 'opportunities' && !state.selected.id) selectPipeline(state.pipeline.find(item => !item.done)?.id);
+  if (resolved === 'tracker' && state.selected.kind !== 'app') selectApplication(state.applications[0]?.number);
   renderDetail();
 }
+
+/* ═══════════════════════════════════════════
+   DATA LOADING
+   ═══════════════════════════════════════════ */
 
 async function loadAll() {
   const [health, apps, pipeline, reports, jobs] = await Promise.all([
@@ -144,18 +170,22 @@ async function loadAll() {
 function renderAll() {
   renderHealth();
   renderHome();
-  renderPipeline();
+  renderOpportunities();
   renderApplications();
   renderReports();
   renderJobsHint();
   renderDetail();
 }
 
+/* ═══════════════════════════════════════════
+   HEALTH
+   ═══════════════════════════════════════════ */
+
 function renderHealth() {
   const labels = {
     cv: 'CV',
     profile: 'Perfil',
-    profileMode: 'Personalizacion',
+    profileMode: 'Personalización',
     portals: 'Portales',
     applications: 'Tracker',
     dataDir: 'Datos',
@@ -175,6 +205,10 @@ function renderHealth() {
   `).join('');
 }
 
+/* ═══════════════════════════════════════════
+   HOME
+   ═══════════════════════════════════════════ */
+
 function renderHome() {
   const m = state.metrics || {};
   const pending = state.pipeline.filter(item => !item.done).length;
@@ -184,7 +218,7 @@ function renderHome() {
     ['Activas', m.active ?? 0],
     ['Top >=4', m.top ?? 0],
     ['Pipeline', pending],
-    ['Jobs vivos', activeJobs],
+    ['Trabajos vivos', activeJobs],
   ].map(([label, value]) => `<button class="metric" data-home-metric="${escapeHtml(label)}"><strong>${value}</strong><span>${label}</span></button>`).join('');
 
   const top = state.applications.filter(app => app.score >= 4 && app.status === 'Evaluated').slice(0, 5);
@@ -195,7 +229,7 @@ function renderHome() {
     ...pendingItems.map(item => priorityPipeline(item)),
     ...low.map(app => priorityApp(app, 'Score bajo: recomienda descartar')),
   ];
-  $('#priority-list').innerHTML = items.join('') || '<div class="empty">No hay acciones urgentes. Buen momento para escanear portales o revisar patrones.</div>';
+  $('#priority-list').innerHTML = items.join('') || `<div class="empty-state"><span class="empty-icon">◇</span><span class="empty-title">Sin acciones urgentes</span><span class="empty-subtitle">Buen momento para escanear portales o revisar patrones.</span></div>`;
   renderFollowupSummary();
 }
 
@@ -212,11 +246,11 @@ function priorityApp(app, label) {
 
 function priorityPipeline(item) {
   return `
-    <button class="decision-item" data-select-pipeline="${item.id}" data-jump="inbox">
+    <button class="decision-item" data-select-pipeline="${item.id}" data-jump="opportunities">
       <span class="score-pill">URL</span>
       <strong>${escapeHtml(item.company || item.sourceHost || 'Pipeline')}</strong>
       <span>${escapeHtml(item.role || item.url)}</span>
-      <em>Pendiente de evaluacion</em>
+      <em>Pendiente de evaluación</em>
     </button>
   `;
 }
@@ -227,11 +261,55 @@ function renderFollowupSummary() {
     $('#followup-summary').innerHTML = '<button class="ghost-btn" data-load-insights>Calcular seguimientos</button>';
     return;
   }
-  const text = JSON.stringify(data, null, 2).slice(0, 900);
-  $('#followup-summary').innerHTML = `<pre>${escapeHtml(text)}</pre>`;
+  const items = extractFollowupItems(data);
+  if (!items.length) {
+    $('#followup-summary').innerHTML = '<div class="empty">Sin seguimientos pendientes.</div>';
+    return;
+  }
+  $('#followup-summary').innerHTML = `<div class="insights-list">${items.slice(0, 5).map(renderFollowupItem).join('')}</div>`;
 }
 
-function renderPipeline() {
+function extractFollowupItems(data) {
+  const items = [];
+  if (Array.isArray(data?.overdue)) {
+    data.overdue.forEach(f => items.push({ ...f, urgency: 'overdue' }));
+  }
+  if (Array.isArray(data?.due)) {
+    data.due.forEach(f => items.push({ ...f, urgency: 'due' }));
+  }
+  if (Array.isArray(data?.upcoming)) {
+    data.upcoming.forEach(f => items.push({ ...f, urgency: 'upcoming' }));
+  }
+  if (Array.isArray(data)) {
+    data.forEach(f => items.push({ ...f, urgency: f.overdue ? 'overdue' : (f.due ? 'due' : 'upcoming') }));
+  }
+  return items;
+}
+
+function renderFollowupItem(item) {
+  const urgency = item.urgency || 'upcoming';
+  const icon = urgency === 'overdue' ? '⚠' : urgency === 'due' ? '◎' : '◇';
+  const label = urgency === 'overdue' ? 'Vencido' : urgency === 'due' ? 'Pendiente' : 'Próximo';
+  const company = item.company || item.Company || '';
+  const role = item.role || item.Role || '';
+  const days = item.daysSinceContact || item.days || '';
+  const action = item.recommendedAction || item.action || item.nextAction || '';
+  return `
+    <div class="insight-item ${urgency}">
+      <span class="insight-icon">${icon}</span>
+      <div class="insight-body">
+        <span class="insight-title">${escapeHtml(company)}${role ? ` — ${escapeHtml(role)}` : ''}</span>
+        <span class="insight-meta">${escapeHtml(label)}${days ? ` · ${days} días sin contacto` : ''}${action ? ` · ${escapeHtml(action)}` : ''}</span>
+      </div>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════
+   OPPORTUNITIES (was Pipeline/Inbox)
+   ═══════════════════════════════════════════ */
+
+function renderOpportunities() {
   const query = ($('#pipeline-search')?.value || '').toLowerCase();
   const filter = $('#pipeline-filter')?.value || 'pending';
   const rows = state.pipeline.filter(item => {
@@ -255,8 +333,12 @@ function renderPipeline() {
         ${item.sourceHost ? `<em class="chip">${escapeHtml(item.sourceHost)}</em>` : ''}
       </span>
     </button>
-  `).join('') || '<div class="empty">No hay entradas para este filtro.</div>';
+  `).join('') || '<div class="empty-state"><span class="empty-icon">◎</span><span class="empty-title">Sin entradas</span><span class="empty-subtitle">No hay entradas para este filtro.</span></div>';
 }
+
+/* ═══════════════════════════════════════════
+   TRACKER
+   ═══════════════════════════════════════════ */
 
 function renderApplications() {
   const statusFilter = $('#status-filter');
@@ -277,7 +359,7 @@ function renderApplications() {
   });
   $('#applications-table').innerHTML = `
     <div class="table-head">
-      <span>#</span><span>Empresa / rol</span><span>Score</span><span>Estado</span><span>Decision</span>
+      <span>#</span><span>Empresa / rol</span><span>Score</span><span>Estado</span><span>Decisión</span>
     </div>
     ${rows.map(app => `
       <button class="table-row ${state.selected.kind === 'app' && String(state.selected.id) === String(app.number) ? 'selected' : ''}" data-select-app="${app.number}">
@@ -285,11 +367,15 @@ function renderApplications() {
         <span data-label="Empresa / rol"><strong>${escapeHtml(app.company)}</strong><small>${escapeHtml(app.role)}</small></span>
         <span data-label="Score"><em class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</em></span>
         <span data-label="Estado"><em class="chip">${escapeHtml(statusLabels[app.status] || app.status)}</em></span>
-        <span data-label="Decision">${app.score < 4 ? '<em class="chip bad">descartar</em>' : '<em class="chip good">revisar</em>'}</span>
+        <span data-label="Decisión">${app.score < 4 ? '<em class="chip bad">descartar</em>' : '<em class="chip good">revisar</em>'}</span>
       </button>
     `).join('')}
   `;
 }
+
+/* ═══════════════════════════════════════════
+   REPORTS
+   ═══════════════════════════════════════════ */
 
 function renderReports() {
   const selected = state.loadedReport?.id || state.reports[0]?.id || '';
@@ -300,6 +386,15 @@ function renderReports() {
   `).join('');
 }
 
+function renderJobsHint() {
+  const running = state.jobs.filter(job => job.status === 'running');
+  $('#evaluate-status').textContent = running.length ? `${running.length} trabajos activos` : '';
+}
+
+/* ═══════════════════════════════════════════
+   LOGS
+   ═══════════════════════════════════════════ */
+
 function appendLog(selector, message, reset = false) {
   const log = $(selector);
   if (!log) return;
@@ -307,15 +402,14 @@ function appendLog(selector, message, reset = false) {
   log.scrollTop = log.scrollHeight;
 }
 
-function renderJobsHint() {
-  const running = state.jobs.filter(job => job.status === 'running');
-  $('#evaluate-status').textContent = running.length ? `${running.length} job(s) activos` : '';
-}
+/* ═══════════════════════════════════════════
+   SELECTION
+   ═══════════════════════════════════════════ */
 
 function selectPipeline(id) {
   if (id === undefined || id === null) return;
   state.selected = { kind: 'pipeline', id: String(id) };
-  renderPipeline();
+  renderOpportunities();
   renderDetail();
 }
 
@@ -422,13 +516,17 @@ function hydrateAssistantsFromSelection(kind = null) {
   form.dataset.contextKey = key;
 }
 
+/* ═══════════════════════════════════════════
+   REPORT VIEWER
+   ═══════════════════════════════════════════ */
+
 function renderReportViewer(report) {
   const sections = report.sections || {};
   const blocks = [
     ['Resumen', sections.roleSummary || report.tldr],
     ['Match', sections.match],
     ['Estrategia', sections.strategy],
-    ['Compensacion', sections.comp],
+    ['Compensación', sections.comp],
     ['CV / LinkedIn', sections.customization],
     ['Entrevista', sections.interview],
     ['Legitimidad', sections.legitimacy],
@@ -438,7 +536,7 @@ function renderReportViewer(report) {
       <div>
         <p class="eyebrow">${escapeHtml(report.company || 'Informe')}</p>
         <h2>${escapeHtml(report.role || report.title)}</h2>
-        <p>${escapeHtml(report.tldr || 'Sin TL;DR extraido.')}</p>
+        <p>${escapeHtml(report.tldr || 'Sin TL;DR extraído.')}</p>
       </div>
       <span class="score-tower ${scoreClass(report.score)}">${escapeHtml(report.scoreRaw || 'n/a')}</span>
     </header>
@@ -453,16 +551,20 @@ function renderReportViewer(report) {
   `;
 }
 
+/* ═══════════════════════════════════════════
+   DETAIL PANEL
+   ═══════════════════════════════════════════ */
+
 function renderDetail() {
   const box = $('#detail-panel');
   if (state.selected.kind === 'pipeline') return renderPipelineDetail(box);
   if (state.selected.kind === 'app') return renderApplicationDetail(box);
   if (state.selected.kind === 'report') return renderReportDetail(box);
   box.innerHTML = `
-    <p class="eyebrow">Command Center</p>
-    <h2>Decision primero</h2>
-    <p class="muted">Selecciona una oferta, una aplicacion o un informe para ver acciones contextuales.</p>
-    <div class="detail-stat"><strong>${state.pipeline.filter(i => !i.done).length}</strong><span>pendientes en inbox</span></div>
+    <p class="eyebrow">Centro de decisiones</p>
+    <h2>Decisión primero</h2>
+    <p class="muted">Selecciona una oferta, una aplicación o un informe para ver acciones contextuales.</p>
+    <div class="detail-stat"><strong>${state.pipeline.filter(i => !i.done).length}</strong><span>pendientes en oportunidades</span></div>
     <div class="detail-stat"><strong>${state.applications.filter(a => a.score >= 4 && a.status === 'Evaluated').length}</strong><span>top pendientes de decidir</span></div>
   `;
 }
@@ -475,13 +577,13 @@ function renderPipelineDetail(box) {
   }
   const live = state.liveness[item.id];
   box.innerHTML = `
-    <p class="eyebrow">Inbox</p>
+    <p class="eyebrow">Oportunidad</p>
     <h2>${escapeHtml(item.company || item.sourceHost || 'Oferta')}</h2>
     <p>${escapeHtml(item.role || item.url)}</p>
     <dl class="detail-list">
       <dt>URL</dt><dd><a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.sourceHost || item.url)}</a></dd>
       <dt>Estado</dt><dd>${item.done ? 'Marcada como hecha' : 'Pendiente'}</dd>
-      <dt>Senales</dt><dd>${[
+      <dt>Señales</dt><dd>${[
         item.duplicateCandidate ? 'posible duplicada' : '',
         item.evaluatedCandidate ? 'ya evaluada' : '',
         live ? `liveness: ${live.result}` : '',
@@ -508,11 +610,11 @@ function renderApplicationDetail(box) {
     <p>${escapeHtml(app.role)}</p>
     <div class="score-panel ${scoreClass(app.score)}">
       <strong>${escapeHtml(app.scoreRaw || 'n/a')}</strong>
-      <span>${app.score < 4 ? 'Recomendacion: no aplicar salvo razon fuerte.' : 'Lista para decision humana.'}</span>
+      <span>${app.score < 4 ? 'Recomendación: no aplicar salvo razón fuerte.' : 'Lista para decisión humana.'}</span>
     </div>
     <dl class="detail-list">
       <dt>Estado</dt><dd>${escapeHtml(statusLabels[app.status] || app.status)}</dd>
-      <dt>Legitimidad</dt><dd>${escapeHtml(app.legitimacy || 'No extraida')}</dd>
+      <dt>Legitimidad</dt><dd>${escapeHtml(app.legitimacy || 'No extraída')}</dd>
       <dt>Notas</dt><dd>${escapeHtml(app.notes || 'Sin notas')}</dd>
     </dl>
     <label class="field-label">Cambiar estado</label>
@@ -521,7 +623,7 @@ function renderApplicationDetail(box) {
     </select>
     <div class="detail-actions">
       ${app.reportPath ? `<button class="primary-btn" data-open-report-path="${escapeHtml(app.reportPath)}">Ver informe</button>` : ''}
-      <button class="ghost-btn" data-open-assistant="apply-assistant">Apply assistant</button>
+      <button class="ghost-btn" data-open-assistant="apply-assistant">Asistente candidatura</button>
       <button class="ghost-btn" data-open-assistant="interview-prep">Preparar entrevista</button>
       ${app.pdfPath ? `<a class="ghost-btn" href="/api/files?path=${encodeURIComponent(app.pdfPath)}" target="_blank">PDF</a>` : ''}
       ${app.jobUrl ? `<a class="ghost-btn" href="${escapeHtml(app.jobUrl)}" target="_blank" rel="noreferrer">Oferta</a>` : ''}
@@ -542,7 +644,7 @@ function renderReportDetail(box) {
     <p>${escapeHtml(report.role || report.tldr || '')}</p>
     <div class="score-panel ${scoreClass(report.score)}">
       <strong>${escapeHtml(report.scoreRaw || 'n/a')}</strong>
-      <span>${escapeHtml(report.legitimacy || 'Legitimidad no extraida')}</span>
+      <span>${escapeHtml(report.legitimacy || 'Legitimidad no extraída')}</span>
     </div>
     <dl class="detail-list">
       <dt>Fecha</dt><dd>${escapeHtml(report.date || 'n/a')}</dd>
@@ -551,14 +653,18 @@ function renderReportDetail(box) {
     </dl>
     <div class="detail-actions">
       <button class="primary-btn" data-report-pdf="${escapeHtml(report.path)}">Generar PDF</button>
-      <button class="ghost-btn" data-open-assistant="apply-assistant">Apply assistant</button>
-      <button class="ghost-btn" data-open-assistant="deep-research">Research</button>
+      <button class="ghost-btn" data-open-assistant="apply-assistant">Asistente candidatura</button>
+      <button class="ghost-btn" data-open-assistant="deep-research">Investigación</button>
       <button class="ghost-btn" data-open-assistant="interview-prep">Entrevista</button>
       ${report.url ? `<a class="ghost-btn" href="${escapeHtml(report.url)}" target="_blank" rel="noreferrer">Oferta</a>` : ''}
       <button class="ghost-btn" data-learning-report="${escapeHtml(report.id)}">Guardar aprendizaje</button>
     </div>
   `;
 }
+
+/* ═══════════════════════════════════════════
+   EDITOR (Profile view)
+   ═══════════════════════════════════════════ */
 
 async function loadEditor() {
   const [profile, cv, personalization] = await Promise.all([
@@ -585,23 +691,152 @@ async function saveEditor() {
   notify('Cambios guardados en User Layer');
 }
 
+/* ═══════════════════════════════════════════
+   INSIGHTS (Profile → Resumen tab)
+   ═══════════════════════════════════════════ */
+
+async function loadInsights() {
+  const [followups, patterns] = await Promise.all([api('/api/followups'), api('/api/patterns')]);
+  state.followups = followups;
+  state.patterns = patterns;
+  renderInsights();
+  renderFollowupSummary();
+}
+
+function renderInsights() {
+  renderFollowupsInsight();
+  renderPatternsInsight();
+}
+
+function renderFollowupsInsight() {
+  const container = $('#followups-render');
+  if (!container) return;
+  const data = state.followups?.data || state.followups;
+  if (!data) {
+    container.innerHTML = '<div class="empty">Pulsa Recargar para obtener datos de seguimientos.</div>';
+    return;
+  }
+  const items = extractFollowupItems(data);
+  if (!items.length) {
+    container.innerHTML = '<div class="empty">Sin seguimientos pendientes.</div>';
+    return;
+  }
+  container.innerHTML = items.map(renderFollowupItem).join('');
+}
+
+function renderPatternsInsight() {
+  const container = $('#patterns-render');
+  if (!container) return;
+  const data = state.patterns?.data || state.patterns;
+  if (!data) {
+    container.innerHTML = '<div class="empty">Pulsa Recargar para obtener datos de patrones.</div>';
+    return;
+  }
+
+  const cards = [];
+
+  // Top archetypes
+  const archetypes = data.topArchetypes || data.top_archetypes || [];
+  if (archetypes.length) {
+    cards.push(`
+      <div class="insight-item">
+        <span class="insight-icon">◆</span>
+        <div class="insight-body">
+          <span class="insight-title">Arquetipos más frecuentes</span>
+          <span class="insight-meta">${archetypes.map(a => escapeHtml(typeof a === 'string' ? a : `${a.name || a.archetype} (${a.count || a.percentage || ''})`)).join(' · ')}</span>
+        </div>
+      </div>
+    `);
+  }
+
+  // Score distribution
+  const scores = data.scoreDistribution || data.score_distribution || {};
+  const scoreEntries = Object.entries(scores);
+  if (scoreEntries.length) {
+    cards.push(`
+      <div class="insight-item">
+        <span class="insight-icon">▦</span>
+        <div class="insight-body">
+          <span class="insight-title">Distribución de scores</span>
+          <span class="insight-meta">${scoreEntries.map(([k, v]) => `${escapeHtml(k)}: ${v}`).join(' · ')}</span>
+        </div>
+      </div>
+    `);
+  }
+
+  // Status distribution
+  const statuses = data.statusDistribution || data.status_distribution || {};
+  const statusEntries = Object.entries(statuses);
+  if (statusEntries.length) {
+    cards.push(`
+      <div class="insight-item">
+        <span class="insight-icon">◉</span>
+        <div class="insight-body">
+          <span class="insight-title">Distribución de estados</span>
+          <span class="insight-meta">${statusEntries.map(([k, v]) => `${escapeHtml(statusLabels[k] || k)}: ${v}`).join(' · ')}</span>
+        </div>
+      </div>
+    `);
+  }
+
+  // Rejection reasons
+  const rejections = data.rejectionReasons || data.rejection_reasons || [];
+  if (rejections.length) {
+    cards.push(`
+      <div class="insight-item">
+        <span class="insight-icon">✕</span>
+        <div class="insight-body">
+          <span class="insight-title">Razones de rechazo</span>
+          <span class="insight-meta">${rejections.map(r => escapeHtml(typeof r === 'string' ? r : `${r.reason || r.name} (${r.count || ''})`)).join(' · ')}</span>
+        </div>
+      </div>
+    `);
+  }
+
+  // Fallback: if no structured data was found, show raw summary
+  if (!cards.length) {
+    const raw = JSON.stringify(data, null, 2).slice(0, 800);
+    cards.push(`
+      <div class="insight-item">
+        <span class="insight-icon">◇</span>
+        <div class="insight-body">
+          <span class="insight-title">Datos sin procesar</span>
+          <span class="insight-meta" style="white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px;">${escapeHtml(raw)}</span>
+        </div>
+      </div>
+    `);
+  }
+
+  container.innerHTML = cards.join('');
+}
+
+/* ═══════════════════════════════════════════
+   STREAMING / JOBS
+   ═══════════════════════════════════════════ */
+
 function streamJob(jobId, target) {
   const log = $(target);
   log.textContent = `[job] ${jobId}\n`;
   const source = new EventSource(`/api/jobs/${jobId}/events`);
   source.onmessage = event => {
     const item = JSON.parse(event.data);
+
+    // Update pipeline progress checklist if step data present
+    if (item.step) {
+      updateProgressStep(item.step, item.type === 'error' ? 'failed' : (item.type === 'done' || item.type === 'completed' ? 'completed' : 'running'));
+    }
+
     log.textContent += `[${item.type}] ${item.line}\n`;
     log.scrollTop = log.scrollHeight;
     if (['done', 'completed', 'error'].includes(item.type)) {
       source.close();
-      notify(item.type === 'error' ? 'Job finalizado con error' : 'Job completado', item.type === 'error' ? 'error' : 'ok');
+      notify(item.type === 'error' ? 'Trabajo finalizado con error' : 'Trabajo completado', item.type === 'error' ? 'error' : 'ok');
       loadAll().catch(console.error);
     }
   };
   source.onerror = () => {
     source.close();
-    notify('Conexion de eventos cerrada', 'warn');
+    notify('Conexión de eventos cerrada', 'warn');
   };
 }
 
@@ -610,6 +845,29 @@ function streamReturnedJob(result, target) {
   streamJob(result.jobId, target);
   return true;
 }
+
+function updateProgressStep(stepId, status) {
+  const item = $(`#pipeline-progress li[data-step="${stepId}"]`);
+  if (!item) return;
+  // Mark previous steps as completed if they're still pending
+  const allSteps = $$('#pipeline-progress li');
+  let found = false;
+  for (const step of allSteps) {
+    if (step === item) { found = true; break; }
+    if (step.dataset.status === 'pending' || step.dataset.status === 'running') {
+      step.dataset.status = 'completed';
+    }
+  }
+  item.dataset.status = status;
+}
+
+function resetProgressChecklist() {
+  $$('#pipeline-progress li').forEach(li => { li.dataset.status = 'pending'; });
+}
+
+/* ═══════════════════════════════════════════
+   CV / ARTIFACTS
+   ═══════════════════════════════════════════ */
 
 function setArtifactLink(selector, relPath) {
   const link = $(selector);
@@ -627,91 +885,37 @@ function setArtifactLink(selector, relPath) {
   link.removeAttribute('aria-disabled');
 }
 
-async function loadInsights() {
-  const [followups, patterns] = await Promise.all([api('/api/followups'), api('/api/patterns')]);
-  state.followups = followups;
-  state.patterns = patterns;
-  $('#followups-json').textContent = JSON.stringify(followups.data ?? followups, null, 2);
-  $('#patterns-json').textContent = JSON.stringify(patterns.data ?? patterns, null, 2);
-  renderFollowupSummary();
+function renderKeywordCoverage(keywords = [], sourceText = '') {
+  const box = $('#keyword-coverage');
+  const cvText = String(state.editorData?.cv || '').toLowerCase();
+  const jdText = String(sourceText || '').toLowerCase();
+  const unique = [...new Set(keywords.filter(Boolean))];
+  const rows = unique.map(word => ({
+    word,
+    inCv: cvText.includes(String(word).toLowerCase()),
+    inTarget: jdText.includes(String(word).toLowerCase()),
+  }));
+  const covered = rows.filter(row => row.inCv).length;
+  box.innerHTML = `
+    <div class="coverage-summary">
+      <strong>${covered}/${rows.length || 0}</strong>
+      <span>keywords cubiertos en cv.md</span>
+    </div>
+    <div class="keyword-list">
+      ${rows.map(row => `<span class="${row.inCv ? 'covered' : 'missing'}">${escapeHtml(row.word)}</span>`).join('') || '<span class="muted">Genera un CV para ver keywords.</span>'}
+    </div>
+  `;
 }
 
-function fillEvaluateFromPipeline(id) {
-  const item = state.pipeline.find(row => row.id === String(id));
-  if (!item) return;
-  setView('evaluate');
-  const form = $('#evaluate-form');
-  form.url.value = item.url || '';
-  form.title.value = [item.company, item.role].filter(Boolean).join(' - ');
-  form.jdText.focus();
-}
+/* ═══════════════════════════════════════════
+   ASSISTANT (Dossier)
+   ═══════════════════════════════════════════ */
 
-async function updatePipeline(id, patch) {
-  await api(`/api/pipeline/${id}`, { method: 'PATCH', body: patch });
-  notify('Pipeline actualizado');
-  await loadAll();
-}
-
-async function deletePipeline(id) {
-  const item = state.pipeline.find(row => row.id === String(id));
-  if (!item || !confirm(`Eliminar del pipeline?\n\n${item.company || item.url}`)) return;
-  await api(`/api/pipeline/${id}`, { method: 'DELETE' });
-  state.selected = { kind: 'pipeline', id: null };
-  notify('Entrada eliminada del pipeline');
-  await loadAll();
-}
-
-async function updateStatus(number, status) {
-  await api(`/api/applications/${number}/status`, { method: 'PATCH', body: { status } });
-  notify('Estado actualizado');
-  await loadAll();
-}
-
-async function verifyPipeline(id) {
-  const item = state.pipeline.find(row => row.id === String(id));
-  if (!item) return;
-  state.liveness[id] = { result: 'checking' };
-  renderDetail();
-  state.liveness[id] = await api('/api/jobs/liveness', { method: 'POST', body: { url: item.url } });
-  notify(`Liveness: ${state.liveness[id].result}`);
-  renderDetail();
-}
-
-async function openLearning(payload) {
-  const { proposal } = await api('/api/learning/proposal', { method: 'POST', body: payload });
-  $('#learning-destination').value = proposal.destination || 'profileMode';
-  $('#learning-content').value = proposal.content || '';
-  $('#learning-dialog').showModal();
-}
-
-async function applyLearningFromDialog() {
-  await api('/api/learning/apply', {
-    method: 'POST',
-    body: {
-      destination: $('#learning-destination').value,
-      content: $('#learning-content').value,
-    },
-  });
-  $('#learning-dialog').close();
-  await loadEditor();
-  notify('Aprendizaje guardado');
-}
-
-async function runV1Action(path, method, logSelector) {
-  const log = $(logSelector);
-  log.textContent = 'Ejecutando...\n';
-  try {
-    const result = await api(path, { method });
-    if (streamReturnedJob(result, logSelector)) {
-      notify(`Job iniciado: ${result.jobId}`);
-      return;
-    }
-    log.textContent = JSON.stringify(result.result ?? result, null, 2);
-    notify('Accion V1 completada');
-  } catch (err) {
-    log.textContent = `[error] ${err.message}`;
-    notify(err.message, 'error');
-  }
+function openAssistant(kind) {
+  setView('dossier');
+  hydrateAssistantsFromSelection(kind);
+  $('#module-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  notify('Asistente preparado con la oferta seleccionada');
 }
 
 function modulePayload(form) {
@@ -792,49 +996,105 @@ function renderAssistantLog(jobId) {
     }
     if (['done', 'completed', 'error'].includes(item.type)) {
       source.close();
-      notify(item.type === 'error' ? 'Job finalizado con error' : 'Asistente listo', item.type === 'error' ? 'error' : 'ok');
+      notify(item.type === 'error' ? 'Trabajo finalizado con error' : 'Asistente listo', item.type === 'error' ? 'error' : 'ok');
       loadAll().catch(console.error);
     }
   };
   source.onerror = () => {
     source.close();
-    notify('Conexion de eventos cerrada', 'warn');
+    notify('Conexión de eventos cerrada', 'warn');
   };
 }
 
-function renderKeywordCoverage(keywords = [], sourceText = '') {
-  const box = $('#keyword-coverage');
-  const cvText = String(state.editorData?.cv || '').toLowerCase();
-  const jdText = String(sourceText || '').toLowerCase();
-  const unique = [...new Set(keywords.filter(Boolean))];
-  const rows = unique.map(word => ({
-    word,
-    inCv: cvText.includes(String(word).toLowerCase()),
-    inTarget: jdText.includes(String(word).toLowerCase()),
-  }));
-  const covered = rows.filter(row => row.inCv).length;
-  box.innerHTML = `
-    <div class="coverage-summary">
-      <strong>${covered}/${rows.length || 0}</strong>
-      <span>keywords covered in cv.md</span>
-    </div>
-    <div class="keyword-list">
-      ${rows.map(row => `<span class="${row.inCv ? 'covered' : 'missing'}">${escapeHtml(row.word)}</span>`).join('') || '<span class="muted">Genera un CV para ver keywords.</span>'}
-    </div>
-  `;
+/* ═══════════════════════════════════════════
+   MUTATIONS
+   ═══════════════════════════════════════════ */
+
+function fillEvaluateFromPipeline(id) {
+  const item = state.pipeline.find(row => row.id === String(id));
+  if (!item) return;
+  setView('evaluate');
+  const form = $('#evaluate-form');
+  form.url.value = item.url || '';
+  form.title.value = [item.company, item.role].filter(Boolean).join(' - ');
+  form.jdText.focus();
 }
 
-function openAssistant(kind) {
-  setView('lab');
-  $$('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.lab === 'insights'));
-  $$('.lab-pane').forEach(pane => pane.classList.toggle('active', pane.id === 'lab-insights'));
-  hydrateAssistantsFromSelection(kind);
-  $('#module-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  notify('Asistente preparado con la oferta seleccionada');
+async function updatePipeline(id, patch) {
+  await api(`/api/pipeline/${id}`, { method: 'PATCH', body: patch });
+  notify('Pipeline actualizado');
+  await loadAll();
 }
+
+async function deletePipeline(id) {
+  const item = state.pipeline.find(row => row.id === String(id));
+  if (!item || !confirm(`¿Eliminar del pipeline?\n\n${item.company || item.url}`)) return;
+  await api(`/api/pipeline/${id}`, { method: 'DELETE' });
+  state.selected = { kind: 'pipeline', id: null };
+  notify('Entrada eliminada del pipeline');
+  await loadAll();
+}
+
+async function updateStatus(number, status) {
+  await api(`/api/applications/${number}/status`, { method: 'PATCH', body: { status } });
+  notify('Estado actualizado');
+  await loadAll();
+}
+
+async function verifyPipeline(id) {
+  const item = state.pipeline.find(row => row.id === String(id));
+  if (!item) return;
+  state.liveness[id] = { result: 'verificando' };
+  renderDetail();
+  state.liveness[id] = await api('/api/jobs/liveness', { method: 'POST', body: { url: item.url } });
+  notify(`Liveness: ${state.liveness[id].result}`);
+  renderDetail();
+}
+
+async function openLearning(payload) {
+  const { proposal } = await api('/api/learning/proposal', { method: 'POST', body: payload });
+  $('#learning-destination').value = proposal.destination || 'profileMode';
+  $('#learning-content').value = proposal.content || '';
+  $('#learning-dialog').showModal();
+}
+
+async function applyLearningFromDialog() {
+  await api('/api/learning/apply', {
+    method: 'POST',
+    body: {
+      destination: $('#learning-destination').value,
+      content: $('#learning-content').value,
+    },
+  });
+  $('#learning-dialog').close();
+  await loadEditor();
+  notify('Aprendizaje guardado');
+}
+
+async function runV1Action(path, method, logSelector) {
+  const log = $(logSelector);
+  log.textContent = 'Ejecutando...\n';
+  try {
+    const result = await api(path, { method });
+    if (streamReturnedJob(result, logSelector)) {
+      notify(`Trabajo iniciado: ${result.jobId}`);
+      return;
+    }
+    log.textContent = JSON.stringify(result.result ?? result, null, 2);
+    notify('Acción completada');
+  } catch (err) {
+    log.textContent = `[error] ${err.message}`;
+    notify(err.message, 'error');
+  }
+}
+
+/* ═══════════════════════════════════════════
+   EVENT WIRING
+   ═══════════════════════════════════════════ */
 
 function wireEvents() {
   $$('.nav-item').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
+
   document.addEventListener('click', async event => {
     const target = event.target.closest('button, a');
     if (!target) return;
@@ -892,8 +1152,8 @@ function wireEvents() {
     }
   });
 
-  $('#pipeline-search').addEventListener('input', renderPipeline);
-  $('#pipeline-filter').addEventListener('change', renderPipeline);
+  $('#pipeline-search').addEventListener('input', renderOpportunities);
+  $('#pipeline-filter').addEventListener('change', renderOpportunities);
   $('#application-search').addEventListener('input', renderApplications);
   $('#status-filter').addEventListener('change', renderApplications);
   $('#score-filter').addEventListener('change', renderApplications);
@@ -907,7 +1167,7 @@ function wireEvents() {
     const body = Object.fromEntries(new FormData(event.currentTarget));
     await api('/api/pipeline', { method: 'POST', body });
     event.currentTarget.reset();
-    notify('Oferta anadida al inbox');
+    notify('Oferta añadida al inbox');
     await loadAll();
   });
 
@@ -918,7 +1178,7 @@ function wireEvents() {
     try {
       const result = await api('/api/jobs/scan', { method: 'POST', body });
       streamReturnedJob(result, '#scan-log');
-      notify(`Scan job iniciado: ${result.jobId}`);
+      notify(`Escaneo iniciado: ${result.jobId}`);
     } catch (err) {
       $('#scan-log').textContent = `[error] ${err.message}`;
     }
@@ -934,7 +1194,7 @@ function wireEvents() {
     try {
       const result = await api('/api/jobs/evaluate', { method: 'POST', body });
       streamReturnedJob(result, '#evaluate-log');
-      notify(`Evaluate job iniciado: ${result.jobId}`);
+      notify(`Evaluación iniciada: ${result.jobId}`);
     } catch (err) {
       $('#evaluate-log').textContent = `[error] ${err.message}`;
     }
@@ -946,6 +1206,7 @@ function wireEvents() {
       $('#evaluate-log').textContent = '[error] Pega un JD o indica una URL.';
       return;
     }
+    resetProgressChecklist();
     try {
       const result = await api('/api/jobs/auto-pipeline', { method: 'POST', body });
       streamReturnedJob(result, '#evaluate-log');
@@ -962,7 +1223,7 @@ function wireEvents() {
     if (!report) return;
     const result = await api('/api/jobs/report-pdf', { method: 'POST', body: { reportPath: report.path } });
     streamReturnedJob(result, '#report-log');
-    notify(`PDF job iniciado: ${result.jobId}`);
+    notify(`PDF iniciado: ${result.jobId}`);
   });
   $('#generate-cv-pdf').addEventListener('click', async () => {
     const report = state.loadedReport || state.reports.find(row => row.id === $('#report-picker').value);
@@ -991,7 +1252,7 @@ function wireEvents() {
       setArtifactLink('#cv-preview-link', result.htmlPath);
       setArtifactLink('#cv-download-link', result.outputPath);
       renderKeywordCoverage(result.keywords, body.jdText || report?.markdown || '');
-      notify(`CV preview job iniciado: ${result.jobId}`);
+      notify(`Vista previa CV iniciada: ${result.jobId}`);
     } catch (err) {
       $('#report-log').textContent = `[error] ${err.message}`;
       notify(err.message, 'error');
@@ -1014,7 +1275,7 @@ function wireEvents() {
     try {
       const result = await api('/api/jobs/liveness-bulk', { method: 'POST', body: { urls } });
       streamReturnedJob(result, '#batch-log');
-      notify(`Liveness job iniciado: ${result.jobId}`);
+      notify(`Liveness iniciado: ${result.jobId}`);
     } catch (err) {
       $('#batch-log').textContent = `[error] ${err.message}`;
       notify(err.message, 'error');
@@ -1028,7 +1289,7 @@ function wireEvents() {
       const result = await api(`/api/modules/${kind}`, { method: 'POST', body: modulePayload(event.currentTarget) });
       if (result.jobId) {
         renderAssistantLog(result.jobId);
-        notify(`Modulo job iniciado: ${result.jobId}`);
+        notify(`Módulo iniciado: ${result.jobId}`);
         return;
       }
       renderAssistantOutput(result);
@@ -1045,8 +1306,22 @@ function wireEvents() {
     if (detailStatus) await updateStatus(detailStatus.dataset.statusDetail, detailStatus.value);
   });
 
-  $$('.tab').forEach(tab => tab.addEventListener('click', () => {
-    $$('.tab').forEach(t => t.classList.toggle('active', t === tab));
+  // Profile tabs
+  $$('[data-profile-tab]').forEach(tab => tab.addEventListener('click', () => {
+    $$('[data-profile-tab]').forEach(t => t.classList.toggle('active', t === tab));
+    const isInsights = tab.dataset.profileTab === 'insights';
+    $('#profile-insights')?.classList.toggle('active', isInsights);
+    $('#profile-editor')?.classList.toggle('active', !isInsights);
+    if (!isInsights) {
+      state.editorData[state.editorKey] = $('#editor').value;
+      state.editorKey = tab.dataset.profileTab;
+      $('#editor').value = state.editorData[state.editorKey] || '';
+    }
+  }));
+
+  // Backward compat: old .tab[data-lab] tabs (in case any remain in compat view)
+  $$('.tab[data-lab]').forEach(tab => tab.addEventListener('click', () => {
+    $$('.tab[data-lab]').forEach(t => t.classList.toggle('active', t === tab));
     $$('.lab-pane').forEach(pane => pane.classList.toggle('active', pane.id === (tab.dataset.lab === 'insights' ? 'lab-insights' : 'lab-editor')));
     if (tab.dataset.lab !== 'insights') {
       state.editorData[state.editorKey] = $('#editor').value;
@@ -1054,6 +1329,7 @@ function wireEvents() {
       $('#editor').value = state.editorData[state.editorKey] || '';
     }
   }));
+
   $('#save-editor').addEventListener('click', saveEditor);
   $('#load-followups').addEventListener('click', loadInsights);
   $('#load-patterns').addEventListener('click', loadInsights);
@@ -1063,11 +1339,16 @@ function wireEvents() {
   });
 }
 
+/* ═══════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════ */
+
 try {
   wireEvents();
   await loadAll();
   await loadEditor();
   await loadInsights().catch(() => {});
+  renderInsights();
   if (state.reports[0]) await selectReport(state.reports[0].id).catch(() => {});
   setView('home');
 } catch (err) {

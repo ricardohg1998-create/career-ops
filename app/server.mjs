@@ -988,6 +988,65 @@ async function handleApi(req, res, url) {
     });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/dashboard') {
+    const apps = parseApplications();
+    const metrics = computeMetrics(apps);
+    const pipeline = parsePipeline().entries;
+    const pending = pipeline.filter(e => !e.done);
+    const topApps = apps.filter(a => a.score >= 4 && a.status === 'Evaluated').slice(0, 5);
+    const lowApps = apps.filter(a => typeof a.score === 'number' && a.score < 4 && a.status === 'Evaluated').slice(0, 3);
+    const pendingPipeline = pending.slice(0, 5);
+    const runningJobs = [...jobs.values()].filter(j => j.status === 'running').map(({listeners, child, cancel, ...j}) => j);
+    const checks = healthChecks();
+
+    return json(res, 200, {
+      ok: true,
+      metrics,
+      priorities: {
+        topApps: topApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'Lista para decidir' })),
+        lowApps: lowApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'Score bajo: recomienda descartar' })),
+        pendingPipeline: pendingPipeline.map(p => ({ id: p.id, url: p.url, company: p.company, role: p.role, sourceHost: p.sourceHost, action: 'Pendiente de evaluación' })),
+      },
+      health: { ok: Object.values(checks).every(Boolean), checks },
+      version: readText(userFiles.version, 'unknown').trim(),
+      runningJobs,
+      pipelineCount: pending.length,
+    });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/next-actions') {
+    const apps = parseApplications();
+    const pipeline = parsePipeline().entries;
+    const pending = pipeline.filter(e => !e.done);
+    const actions = [];
+
+    // Top scoring apps needing decision
+    const topUndecided = apps.filter(a => a.score >= 4 && a.status === 'Evaluated');
+    for (const a of topUndecided.slice(0, 3)) {
+      actions.push({ type: 'decide', priority: 'high', company: a.company, role: a.role, number: a.number, score: a.scoreRaw, label: `Decidir: ${a.company} – ${a.role} (${a.scoreRaw})` });
+    }
+
+    // Low scoring apps that should be discarded
+    const lowUndecided = apps.filter(a => typeof a.score === 'number' && a.score < 4 && a.status === 'Evaluated');
+    for (const a of lowUndecided.slice(0, 2)) {
+      actions.push({ type: 'discard', priority: 'medium', company: a.company, role: a.role, number: a.number, score: a.scoreRaw, label: `Descartar: ${a.company} – ${a.role} (${a.scoreRaw})` });
+    }
+
+    // Pending pipeline items
+    if (pending.length > 0) {
+      actions.push({ type: 'evaluate', priority: 'medium', count: pending.length, label: `${pending.length} oferta${pending.length > 1 ? 's' : ''} pendiente${pending.length > 1 ? 's' : ''} de evaluación` });
+    }
+
+    // Health issues
+    const checks = healthChecks();
+    const missing = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k);
+    if (missing.length > 0) {
+      actions.push({ type: 'setup', priority: 'low', missing, label: `Setup incompleto: faltan ${missing.join(', ')}` });
+    }
+
+    return json(res, 200, { ok: true, actions: actions.sort((a, b) => { const p = { high: 0, medium: 1, low: 2 }; return (p[a.priority] ?? 3) - (p[b.priority] ?? 3); }) });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/setup/readiness') {
     const checks = healthChecks();
     return json(res, 200, {

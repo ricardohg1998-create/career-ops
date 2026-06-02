@@ -104,6 +104,8 @@ async function assertMockAutoPipelineFixture() {
 try {
   await waitForServer();
   await assertOk('/api/health', data => typeof data.ok === 'boolean');
+  await assertOk('/api/dashboard', data => data.ok && data.metrics && data.priorities && data.health);
+  await assertOk('/api/next-actions', data => data.ok && Array.isArray(data.actions));
   await assertOk('/api/applications', data => Array.isArray(data.applications) && data.metrics);
   await assertOk('/api/pipeline', data => Array.isArray(data.entries));
   await assertOk('/api/reports', data => Array.isArray(data.reports));

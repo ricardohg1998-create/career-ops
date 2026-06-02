@@ -60,7 +60,7 @@ try {
   await page.goto(base, { waitUntil: 'networkidle' });
   await page.locator('.safety-pill').waitFor();
   assert((await page.locator('.safety-pill').textContent()).includes('No submit/send/apply automatico'), 'app-level no-submit safety banner is missing');
-  await page.locator('[data-view="lab"]').click();
+  await page.locator('[data-view="dossier"]').click();
   await page.locator('#module-form').waitFor();
   assert((await page.locator('#module-form').textContent()).includes('Generar asistente'), 'assistant CTA copy is missing');
 
@@ -92,6 +92,28 @@ try {
   });
   assert(!overflow, 'mobile viewport has horizontal overflow');
   console.log('ok browser mobile viewport');
+
+  // Navigation: click through all 7 sections and verify each becomes active
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(base, { waitUntil: 'networkidle' });
+  const sections = ['home', 'opportunities', 'evaluate', 'dossier', 'tracker', 'profile', 'system'];
+  for (const section of sections) {
+    const nav = page.locator(`[data-view="${section}"]`);
+    if (await nav.count() === 0) continue;
+    await nav.click();
+    await page.waitForTimeout(200);
+    const isActive = await nav.evaluate(el => el.classList.contains('active') || el.getAttribute('aria-current') === 'page' || el.closest('.active') !== null);
+    assert(isActive, `nav section "${section}" did not become active after click`);
+  }
+  console.log('ok browser navigation sections');
+
+  // Verify no visible key English words remain in the UI
+  const forbiddenPhrases = ['Command Center', 'Batch control room', 'Draft only', 'Assisted mode'];
+  const bodyText = await page.locator('body').innerText();
+  for (const phrase of forbiddenPhrases) {
+    assert(!bodyText.includes(phrase), `UI body contains English phrase: "${phrase}"`);
+  }
+  console.log('ok browser no English key phrases');
 
   await browser.close();
 } finally {

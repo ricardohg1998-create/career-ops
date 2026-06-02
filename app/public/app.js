@@ -1,53 +1,24 @@
-const state = {
-  view: 'home',
-  health: null,
-  applications: [],
-  metrics: null,
-  states: [],
-  pipeline: [],
-  reports: [],
-  jobs: [],
-  followups: null,
-  patterns: null,
-  selected: { kind: 'home', id: null },
-  editorKey: 'profile',
-  editorData: {},
-  loadedReport: null,
-  liveness: {},
-};
+import { api } from './modules/api.js';
+import { state, statusLabels, viewTitles } from './modules/state.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const statusLabels = {
-  Evaluated: 'Evaluada',
-  Applied: 'Aplicada',
-  Responded: 'Respondida',
-  Interview: 'Entrevista',
-  Offer: 'Oferta',
-  Rejected: 'Rechazada',
-  Discarded: 'Descartada',
-  SKIP: 'No aplicar',
-};
+function notify(message, type = 'ok') {
+  const box = $('#mutation-feedback');
+  if (!box) return;
+  box.textContent = message;
+  box.dataset.type = type;
+  box.classList.add('visible');
+  clearTimeout(notify.timer);
+  notify.timer = setTimeout(() => box.classList.remove('visible'), 3200);
+}
 
-const viewTitles = {
-  home: 'Inicio',
-  inbox: 'Inbox de oportunidades',
-  evaluate: 'Evaluar y decidir',
-  tracker: 'Tracker operativo',
-  lab: 'Lab de perfil e insights',
-};
-
-async function api(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
-    ...options,
-    body: options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body,
-  });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new Error(data?.error || `Request failed: ${res.status}`);
-  return data;
+function fatal(message) {
+  const box = $('#fatal-error');
+  if (!box) return;
+  box.textContent = message;
+  box.classList.remove('hidden');
 }
 
 function escapeHtml(value) {
@@ -276,11 +247,11 @@ function renderApplications() {
     </div>
     ${rows.map(app => `
       <button class="table-row ${state.selected.kind === 'app' && String(state.selected.id) === String(app.number) ? 'selected' : ''}" data-select-app="${app.number}">
-        <span>${app.number}</span>
-        <span><strong>${escapeHtml(app.company)}</strong><small>${escapeHtml(app.role)}</small></span>
-        <span><em class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</em></span>
-        <span><em class="chip">${escapeHtml(statusLabels[app.status] || app.status)}</em></span>
-        <span>${app.score < 4 ? '<em class="chip bad">descartar</em>' : '<em class="chip good">revisar</em>'}</span>
+        <span data-label="#">${app.number}</span>
+        <span data-label="Empresa / rol"><strong>${escapeHtml(app.company)}</strong><small>${escapeHtml(app.role)}</small></span>
+        <span data-label="Score"><em class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</em></span>
+        <span data-label="Estado"><em class="chip">${escapeHtml(statusLabels[app.status] || app.status)}</em></span>
+        <span data-label="Decision">${app.score < 4 ? '<em class="chip bad">descartar</em>' : '<em class="chip good">revisar</em>'}</span>
       </button>
     `).join('')}
   `;
@@ -479,6 +450,7 @@ async function saveEditor() {
   else if (state.editorKey === 'cv') await api('/api/cv', { method: 'PUT', body: { content: value } });
   else await api('/api/personalization', { method: 'PUT', body: state.editorData });
   $('#editor-status').textContent = `Guardado a las ${new Date().toLocaleTimeString()}`;
+  notify('Cambios guardados en User Layer');
 }
 
 function streamJob(jobId, target) {
@@ -489,10 +461,15 @@ function streamJob(jobId, target) {
     const item = JSON.parse(event.data);
     log.textContent += `[${item.type}] ${item.line}\n`;
     log.scrollTop = log.scrollHeight;
-    if (item.type === 'done') {
+    if (['done', 'completed', 'error'].includes(item.type)) {
       source.close();
+      notify(item.type === 'error' ? 'Job finalizado con error' : 'Job completado', item.type === 'error' ? 'error' : 'ok');
       loadAll().catch(console.error);
     }
+  };
+  source.onerror = () => {
+    source.close();
+    notify('Conexion de eventos cerrada', 'warn');
   };
 }
 
@@ -517,6 +494,7 @@ function fillEvaluateFromPipeline(id) {
 
 async function updatePipeline(id, patch) {
   await api(`/api/pipeline/${id}`, { method: 'PATCH', body: patch });
+  notify('Pipeline actualizado');
   await loadAll();
 }
 
@@ -525,11 +503,13 @@ async function deletePipeline(id) {
   if (!item || !confirm(`Eliminar del pipeline?\n\n${item.company || item.url}`)) return;
   await api(`/api/pipeline/${id}`, { method: 'DELETE' });
   state.selected = { kind: 'pipeline', id: null };
+  notify('Entrada eliminada del pipeline');
   await loadAll();
 }
 
 async function updateStatus(number, status) {
   await api(`/api/applications/${number}/status`, { method: 'PATCH', body: { status } });
+  notify('Estado actualizado');
   await loadAll();
 }
 
@@ -539,6 +519,7 @@ async function verifyPipeline(id) {
   state.liveness[id] = { result: 'checking' };
   renderDetail();
   state.liveness[id] = await api('/api/jobs/liveness', { method: 'POST', body: { url: item.url } });
+  notify(`Liveness: ${state.liveness[id].result}`);
   renderDetail();
 }
 
@@ -559,6 +540,35 @@ async function applyLearningFromDialog() {
   });
   $('#learning-dialog').close();
   await loadEditor();
+  notify('Aprendizaje guardado');
+}
+
+async function runV1Action(path, method, logSelector) {
+  const log = $(logSelector);
+  log.textContent = 'Ejecutando...\n';
+  try {
+    const result = await api(path, { method });
+    log.textContent = JSON.stringify(result.result ?? result, null, 2);
+    notify('Accion V1 completada');
+  } catch (err) {
+    log.textContent = `[error] ${err.message}`;
+    notify(err.message, 'error');
+  }
+}
+
+function modulePayload(form) {
+  const data = Object.fromEntries(new FormData(form));
+  const reportIds = String(data.notes || '').split(',').map(s => s.trim()).filter(Boolean);
+  const questions = String(data.notes || '').split(/\r?\n/).filter(Boolean);
+  return {
+    company: data.company,
+    role: data.role,
+    notes: data.notes,
+    questions,
+    reportIds,
+    title: data.company || data.role || data.kind,
+    scores: { northStar: 3, recruiterSignal: 3, timeEffort: 3, opportunityCost: 3, risk: 3, portfolioArtifact: 3, targetSignal: 3, uniqueness: 3, demoAbility: 3, metricsPotential: 3, timeToMvp: 3, starStory: 3 },
+  };
 }
 
 function wireEvents() {
@@ -584,6 +594,10 @@ function wireEvents() {
     if (target.dataset.reportPdf) {
       const result = await api('/api/jobs/report-pdf', { method: 'POST', body: { reportPath: target.dataset.reportPdf } });
       streamJob(result.jobId, '#report-log');
+    }
+    if (target.dataset.v1Action) {
+      const log = target.dataset.v1Action.includes('/update') || target.dataset.v1Action.includes('/provider') || target.dataset.v1Action.includes('/language') ? '#update-log' : '#integrity-log';
+      await runV1Action(target.dataset.v1Action, target.dataset.v1Method || 'GET', log);
     }
     if (target.dataset.learningApp) {
       const app = state.applications.find(row => row.number === Number(target.dataset.learningApp));
@@ -626,6 +640,7 @@ function wireEvents() {
     const body = Object.fromEntries(new FormData(event.currentTarget));
     await api('/api/pipeline', { method: 'POST', body });
     event.currentTarget.reset();
+    notify('Oferta anadida al inbox');
     await loadAll();
   });
 
@@ -656,12 +671,52 @@ function wireEvents() {
     }
   });
 
+  $('#auto-pipeline-btn').addEventListener('click', async () => {
+    const body = Object.fromEntries(new FormData($('#evaluate-form')));
+    if (!String(body.url || '').trim() && !String(body.jdText || '').trim()) {
+      $('#evaluate-log').textContent = '[error] Pega un JD o indica una URL.';
+      return;
+    }
+    try {
+      const result = await api('/api/jobs/auto-pipeline', { method: 'POST', body });
+      streamJob(result.jobId, '#evaluate-log');
+      notify('Auto-pipeline iniciado');
+    } catch (err) {
+      $('#evaluate-log').textContent = `[error] ${err.message}`;
+      notify(err.message, 'error');
+    }
+  });
+
   $('#report-picker').addEventListener('change', event => selectReport(event.target.value));
   $('#generate-report-pdf').addEventListener('click', async () => {
     const report = state.loadedReport || state.reports.find(row => row.id === $('#report-picker').value);
     if (!report) return;
     const result = await api('/api/jobs/report-pdf', { method: 'POST', body: { reportPath: report.path } });
     streamJob(result.jobId, '#report-log');
+  });
+  $('#generate-cv-pdf').addEventListener('click', async () => {
+    const report = state.loadedReport || state.reports.find(row => row.id === $('#report-picker').value);
+    try {
+      const result = await api('/api/jobs/cv-pdf', { method: 'POST', body: { reportId: report?.id, company: report?.company } });
+      streamJob(result.jobId, '#report-log');
+      notify('CV ATS iniciado');
+    } catch (err) {
+      $('#report-log').textContent = `[error] ${err.message}`;
+      notify(err.message, 'error');
+    }
+  });
+
+  $('#module-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const kind = new FormData(event.currentTarget).get('kind');
+    try {
+      const result = await api(`/api/modules/${kind}`, { method: 'POST', body: modulePayload(event.currentTarget) });
+      $('#module-output').textContent = result.markdown || result.result?.markdown || JSON.stringify(result.result ?? result, null, 2);
+      notify('Modulo generado');
+    } catch (err) {
+      $('#module-output').textContent = `[error] ${err.message}`;
+      notify(err.message, 'error');
+    }
   });
 
   document.addEventListener('change', async event => {
@@ -687,9 +742,13 @@ function wireEvents() {
   });
 }
 
-wireEvents();
-await loadAll();
-await loadEditor();
-await loadInsights().catch(() => {});
-if (state.reports[0]) await selectReport(state.reports[0].id).catch(() => {});
-setView('home');
+try {
+  wireEvents();
+  await loadAll();
+  await loadEditor();
+  await loadInsights().catch(() => {});
+  if (state.reports[0]) await selectReport(state.reports[0].id).catch(() => {});
+  setView('home');
+} catch (err) {
+  fatal(`No se pudo iniciar la app: ${err.message}`);
+}

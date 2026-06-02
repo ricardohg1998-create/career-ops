@@ -1,14 +1,23 @@
 #!/usr/bin/env node
 
 import { createServer } from 'node:http';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { classifyLiveness } from '../liveness-core.mjs';
+import {
+  buildDeepResearchPrompt as moduleDeepResearchPrompt,
+  buildInterviewPrepDraft,
+  compareOffers as moduleCompareOffers,
+  createLinkedInOutreachMessage,
+  draftApplicationResponses,
+  evaluateProject as moduleEvaluateProject,
+  evaluateTraining as moduleEvaluateTraining,
+} from './lib/modules/index.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -16,6 +25,8 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.CAREER_OPS_APP_PORT || 4173);
 const MAX_BODY = 10 * 1024 * 1024;
+const JOB_LOG_LIMIT = Number(process.env.CAREER_OPS_JOB_LOG_LIMIT || 1200);
+const JOB_TIMEOUT_MS = Number(process.env.CAREER_OPS_JOB_TIMEOUT_MS || 15 * 60 * 1000);
 
 const jobs = new Map();
 
@@ -67,6 +78,69 @@ function json(res, status, body) {
 
 function readText(file, fallback = '') {
   return existsSync(file) ? readFileSync(file, 'utf-8') : fallback;
+}
+
+function scriptJson(args, options = {}) {
+  return new Promise(resolve => {
+    execFile(process.execPath, args, {
+      cwd: ROOT,
+      encoding: 'utf-8',
+      timeout: options.timeout || 120000,
+      env: { ...process.env, FORCE_COLOR: '0', ...(options.env || {}) },
+    }, (error, stdout = '', stderr = '') => {
+      let data = null;
+      try {
+        const trimmed = stdout.trim();
+        data = trimmed ? JSON.parse(trimmed) : null;
+      } catch {}
+      resolve({
+        ok: !error,
+        code: error?.code ?? 0,
+        data,
+        stdout,
+        stderr,
+        error: error?.message || null,
+      });
+    });
+  });
+}
+
+function commandText(command, args = [], options = {}) {
+  return new Promise(resolve => {
+    execFile(command, args, {
+      cwd: ROOT,
+      encoding: 'utf-8',
+      timeout: options.timeout || 120000,
+      env: { ...process.env, FORCE_COLOR: '0', ...(options.env || {}) },
+    }, (error, stdout = '', stderr = '') => {
+      resolve({ ok: !error, code: error?.code ?? 0, stdout, stderr, error: error?.message || null });
+    });
+  });
+}
+
+function isSafeHttpUrl(value) {
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (host === 'localhost' || host.endsWith('.localhost')) return false;
+    if (host === '0.0.0.0' || host === '::' || host === '::1') return false;
+    if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return false;
+    const private172 = host.match(/^172\.(\d+)\./);
+    if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return false;
+    if (/^169\.254\./.test(host)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function requireSafeUrl(value) {
+  const target = String(value || '').trim();
+  if (!isSafeHttpUrl(target)) {
+    throw Object.assign(new Error('URL no permitida. Usa una URL http(s) publica.'), { status: 400 });
+  }
+  return target;
 }
 
 function ensureUserDirs() {
@@ -387,6 +461,16 @@ function createJob(kind, command, args, options = {}) {
     exitCode: null,
     logs: [],
     listeners: new Set(),
+    child: null,
+    cancel() {
+      if (job.status !== 'running') return false;
+      job.status = 'cancelled';
+      job.endedAt = new Date().toISOString();
+      job.child?.kill('SIGTERM');
+      push('error', 'Job cancelado por el usuario');
+      finish('cancelled', null);
+      return true;
+    },
   };
   jobs.set(id, job);
 
@@ -396,46 +480,138 @@ function createJob(kind, command, args, options = {}) {
     env: { ...process.env, FORCE_COLOR: '0' },
     ...options.spawn,
   });
+  job.child = child;
 
   const push = (type, text) => {
     const lines = String(text).split(/\r?\n/).filter(Boolean);
     for (const line of lines) {
       const event = { type, line, at: new Date().toISOString() };
       job.logs.push(event);
+      if (job.logs.length > JOB_LOG_LIMIT) job.logs.splice(0, job.logs.length - JOB_LOG_LIMIT);
       for (const res of job.listeners) res.write(`data: ${JSON.stringify(event)}\n\n`);
     }
   };
 
-  child.stdout.on('data', data => push('stdout', data));
-  child.stderr.on('data', data => push('stderr', data));
-  child.on('error', err => {
-    job.status = 'failed';
-    job.endedAt = new Date().toISOString();
-    push('error', err.message);
-  });
-  child.on('close', code => {
-    job.status = code === 0 ? 'completed' : 'failed';
+  const finish = (status, code) => {
+    if (job.listeners.size === 0 && job.status === status && job.endedAt) return;
+    job.status = status;
     job.exitCode = code;
-    job.endedAt = new Date().toISOString();
-    const event = { type: 'done', line: `${kind} ${job.status}`, code, at: job.endedAt };
-    job.logs.push(event);
+    job.endedAt = job.endedAt || new Date().toISOString();
+    const event = { type: status === 'completed' ? 'completed' : 'error', line: `${kind} ${status}`, code, at: job.endedAt };
+    const compat = { type: 'done', line: `${kind} ${status}`, code, at: job.endedAt };
+    job.logs.push(event, compat);
     for (const res of job.listeners) {
       res.write(`data: ${JSON.stringify(event)}\n\n`);
+      res.write(`data: ${JSON.stringify(compat)}\n\n`);
       res.end();
     }
     job.listeners.clear();
-    options.onClose?.(code, job);
+  };
+
+  const timeout = setTimeout(() => {
+    if (job.status === 'running') {
+      push('warning', `Timeout tras ${Math.round(JOB_TIMEOUT_MS / 1000)}s`);
+      job.status = 'failed';
+      job.child?.kill('SIGTERM');
+    }
+  }, options.timeoutMs || JOB_TIMEOUT_MS);
+
+  push('started', `${kind} iniciado`);
+  child.stdout.on('data', data => push('progress', data));
+  child.stderr.on('data', data => push('warning', data));
+  child.on('error', err => {
+    clearTimeout(timeout);
+    job.status = 'failed';
+    job.endedAt = new Date().toISOString();
+    push('error', err.message);
+    finish('failed', 1);
+  });
+  child.on('close', async code => {
+    clearTimeout(timeout);
+    if (job.status === 'cancelled') return;
+    let finalCode = code;
+    let finalStatus = code === 0 ? 'completed' : 'failed';
+    if (code === 0 && options.onClose) {
+      try {
+        const result = await options.onClose(code, job, push);
+        if (result?.code && result.code !== 0) {
+          finalCode = result.code;
+          finalStatus = 'failed';
+        }
+      } catch (err) {
+        push('error', err.message);
+        finalCode = 1;
+        finalStatus = 'failed';
+      }
+    }
+    job.endedAt = new Date().toISOString();
+    finish(finalStatus, finalCode);
   });
 
   return job;
 }
 
+function createInlineJob(kind, work, options = {}) {
+  const id = randomUUID();
+  const job = {
+    id,
+    kind,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    exitCode: null,
+    logs: [],
+    listeners: new Set(),
+    cancel() {
+      if (job.status !== 'running') return false;
+      job.status = 'cancelled';
+      job.endedAt = new Date().toISOString();
+      push('error', 'Job cancelado por el usuario');
+      finish('cancelled', null);
+      return true;
+    },
+  };
+  jobs.set(id, job);
+
+  const push = (type, line, extra = {}) => {
+    const event = { type, line: String(line), at: new Date().toISOString(), ...extra };
+    job.logs.push(event);
+    if (job.logs.length > JOB_LOG_LIMIT) job.logs.splice(0, job.logs.length - JOB_LOG_LIMIT);
+    for (const res of job.listeners) res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+  const finish = (status, code = status === 'completed' ? 0 : 1) => {
+    job.status = status;
+    job.exitCode = code;
+    job.endedAt = new Date().toISOString();
+    const event = { type: status === 'completed' ? 'completed' : 'error', line: `${kind} ${status}`, code, at: job.endedAt };
+    const compat = { type: 'done', line: `${kind} ${status}`, code, at: job.endedAt };
+    job.logs.push(event, compat);
+    for (const res of job.listeners) {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+      res.write(`data: ${JSON.stringify(compat)}\n\n`);
+      res.end();
+    }
+    job.listeners.clear();
+  };
+
+  push('started', `${kind} iniciado`);
+  Promise.resolve()
+    .then(() => work({ job, push }))
+    .then(() => finish(job.status === 'cancelled' ? 'cancelled' : 'completed', 0))
+    .catch(err => {
+      push('error', err.message || err);
+      finish('failed', 1);
+    });
+  return job;
+}
+
 async function extractJobText(url) {
+  const target = requireSafeUrl(url);
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
     const title = await page.title().catch(() => '');
     const text = await page.locator('body').innerText({ timeout: 15000 });
@@ -446,11 +622,12 @@ async function extractJobText(url) {
 }
 
 async function checkLiveness(url) {
+  const target = requireSafeUrl(url);
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => null);
+    const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => null);
     await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
     const bodyText = await page.locator('body').innerText({ timeout: 15000 }).catch(() => '');
     const applyControls = await page.locator('a,button,input[type="submit"]').evaluateAll(nodes =>
@@ -464,7 +641,7 @@ async function checkLiveness(url) {
     });
     return {
       ok: true,
-      url,
+      url: target,
       finalUrl: page.url(),
       status: response?.status?.() || 0,
       active: classified.result === 'active',
@@ -473,7 +650,7 @@ async function checkLiveness(url) {
       reason: classified.reason,
     };
   } catch (err) {
-    return { ok: false, url, result: 'unconfirmed', code: 'playwright_error', reason: err.message };
+    return { ok: false, url: target, result: 'unconfirmed', code: 'playwright_error', reason: err.message };
   } finally {
     await browser.close().catch(() => {});
   }
@@ -534,25 +711,298 @@ function slugify(value) {
     .slice(0, 70) || 'job';
 }
 
+function latestReportAfter(previousIds = new Set()) {
+  return listReports().find(report => !previousIds.has(report.id)) || listReports()[0] || null;
+}
+
+function healthChecks() {
+  return {
+    cv: existsSync(userFiles.cv),
+    profile: existsSync(userFiles.profile),
+    profileMode: existsSync(userFiles.profileMode),
+    portals: existsSync(userFiles.portals),
+    applications: existsSync(userFiles.applications),
+    dataDir: existsSync(path.join(ROOT, 'data')),
+    reportsDir: existsSync(path.join(ROOT, 'reports')),
+    outputDir: existsSync(path.join(ROOT, 'output')),
+    nodeModules: existsSync(path.join(ROOT, 'node_modules')),
+  };
+}
+
+function ensureSetupTemplates() {
+  const changedFiles = [];
+  if (!existsSync(userFiles.profileMode) && existsSync(path.join(ROOT, 'modes', '_profile.template.md'))) {
+    copyFileSync(path.join(ROOT, 'modes', '_profile.template.md'), userFiles.profileMode);
+    changedFiles.push('modes/_profile.md');
+  }
+  if (!existsSync(userFiles.profile) && existsSync(path.join(ROOT, 'config', 'profile.example.yml'))) {
+    copyFileSync(path.join(ROOT, 'config', 'profile.example.yml'), userFiles.profile);
+    changedFiles.push('config/profile.yml');
+  }
+  if (!existsSync(userFiles.portals) && existsSync(path.join(ROOT, 'templates', 'portals.example.yml'))) {
+    copyFileSync(path.join(ROOT, 'templates', 'portals.example.yml'), userFiles.portals);
+    changedFiles.push('portals.yml');
+  }
+  if (!existsSync(userFiles.applications)) {
+    mkdirSync(path.dirname(userFiles.applications), { recursive: true });
+    writeFileSync(userFiles.applications, [
+      '# Applications Tracker',
+      '',
+      '| # | Date | Company | Role | Score | Status | PDF | Report | Notes |',
+      '|---|------|---------|------|-------|--------|-----|--------|-------|',
+      '',
+    ].join('\n'), 'utf-8');
+    changedFiles.push('data/applications.md');
+  }
+  ensureUserDirs();
+  return changedFiles;
+}
+
+function dataContractSummary() {
+  return {
+    userLayer: ['cv.md', 'config/profile.yml', 'modes/_profile.md', 'article-digest.md', 'portals.yml', 'data/*', 'reports/*', 'output/*', 'interview-prep/*', 'jds/*'],
+    systemLayer: ['modes/_shared.md', 'modes/oferta.md', 'modes/pdf.md', 'AGENTS.md', 'CLAUDE.md', '*.mjs', 'dashboard/*', 'templates/*'],
+  };
+}
+
+function providerReadiness() {
+  return {
+    opencode: Boolean(process.env.OPENCODE_API_KEY),
+    gemini: Boolean(process.env.GEMINI_API_KEY),
+    model: process.env.OPENCODE_MODEL || 'deepseek-v4-pro',
+    warnings: [
+      process.env.OPENCODE_API_KEY ? '' : 'OPENCODE_API_KEY no configurada: las evaluaciones API pueden fallar o requerir --mock.',
+    ].filter(Boolean),
+  };
+}
+
+function getLanguageConfig() {
+  const parsed = yaml.load(readText(userFiles.profile, '{}')) || {};
+  const modesDir = parsed.language?.modes_dir || 'modes';
+  const available = ['modes', 'modes/de', 'modes/es', 'modes/fr', 'modes/ja', 'modes/pt', 'modes/ru', 'modes/tr', 'modes/ua']
+    .filter(dir => existsSync(path.join(ROOT, dir)));
+  return { modesDir, available };
+}
+
+function updateLanguageConfig(modesDir) {
+  const available = getLanguageConfig().available;
+  if (!available.includes(modesDir)) throw Object.assign(new Error('Directorio de modos no disponible'), { status: 400 });
+  const parsed = yaml.load(readText(userFiles.profile, '{}')) || {};
+  parsed.language = { ...(parsed.language || {}), modes_dir: modesDir };
+  writeFileSync(userFiles.profile, yaml.dump(parsed, { lineWidth: 120 }), 'utf-8');
+  return { modesDir };
+}
+
+function buildCvHtml({ title = 'Career-Ops CV Draft', jdText = '', report = null } = {}) {
+  const profile = yaml.load(readText(userFiles.profile, '{}')) || {};
+  const cv = readText(userFiles.cv, '');
+  const keywords = [...new Set(String(jdText || report?.markdown || '')
+    .toLowerCase()
+    .match(/[a-z][a-z0-9+#.-]{3,}/g) || [])]
+    .filter(word => !['with', 'from', 'this', 'that', 'will', 'role', 'team', 'work', 'para', 'como', 'este'].includes(word))
+    .slice(0, 20);
+  const name = profile.name || profile.full_name || title;
+  return {
+    keywords,
+    html: `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>${escapeHtml(name)} - CV</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;color:#111;background:#fff}.page{max-width:760px;margin:0 auto;padding:42px}
+h1{font-size:28px;margin:0 0 6px}.meta{color:#555;margin-bottom:24px}.section{margin:22px 0}h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #168092;padding-bottom:5px}
+.keywords{display:flex;flex-wrap:wrap;gap:6px}.keywords span{border:1px solid #bbb;border-radius:4px;padding:4px 7px;font-size:12px}pre{white-space:pre-wrap;font-family:inherit;line-height:1.45}
+</style></head><body><main class="page">
+<h1>${escapeHtml(name)}</h1>
+<div class="meta">${escapeHtml([profile.email, profile.location, profile.linkedin_url || profile.linkedin].filter(Boolean).join(' | '))}</div>
+<section class="section"><h2>Targeted Keywords</h2><div class="keywords">${keywords.map(k => `<span>${escapeHtml(k)}</span>`).join('')}</div></section>
+<section class="section"><h2>CV Source</h2><pre>${escapeHtml(cv)}</pre></section>
+</main></body></html>`,
+  };
+}
+
+function buildApplyAssistant(body) {
+  const questions = String(body.questions || '').split(/\r?\n/).map(q => q.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
+  const report = body.reportId ? readReportById(body.reportId) : null;
+  const company = body.company || report?.company || 'Company';
+  const role = body.role || report?.role || 'Role';
+  const base = report?.tldr || 'Use the strongest verified proof points from cv.md and the evaluation report.';
+  return {
+    ok: true,
+    markdown: [`## Responses for ${company} - ${role}`, '', `Based on: ${report?.id || 'manual context'}`, ''].concat(
+      (questions.length ? questions : ['Why are you interested in this role?', 'Why do you want to work here?', 'Tell us about a relevant achievement.'])
+        .map((q, idx) => `### ${idx + 1}. ${q}\n> ${base} I would answer this with a specific example tied to ${role}, keeping it concise and evidence-led.`)
+    ).join('\n\n'),
+  };
+}
+
+function buildDeepResearchPrompt(body) {
+  const company = body.company || 'Company';
+  const role = body.role || 'Role';
+  return { ok: true, markdown: `## Deep Research: ${company} - ${role}
+
+Context: I am evaluating a candidacy for ${role} at ${company}. Produce sourced, actionable interview intelligence.
+
+### 1. AI Strategy
+### 2. Recent moves (last 6 months)
+### 3. Engineering culture
+### 4. Likely challenges
+### 5. Competitors and differentiation
+### 6. Candidate angle
+
+Use cv.md, config/profile.yml, modes/_profile.md, and article-digest.md as candidate context. Cite every factual claim.` };
+}
+
+function buildInterviewPrep(body) {
+  const company = body.company || 'Company';
+  const role = body.role || 'Role';
+  return { ok: true, markdown: `# Interview Intel: ${company} - ${role}
+
+**URL:** ${body.url || 'N/A'}
+**Legitimacy:** ${body.legitimacy || 'unknown'}
+**Report:** ${body.reportId || 'N/A'}
+**Researched:** ${new Date().toISOString().slice(0, 10)}
+
+## Audience Map
+- Recruiter screen: motivation, compensation, location, timing.
+- Hiring manager: scope fit, first 90 days, ownership.
+- Peer technical: implementation depth, tradeoffs, collaboration.
+
+## Story Gaps
+Review interview-prep/story-bank.md and add STAR+R stories for any missing role requirements.` };
+}
+
+function buildOutreach(body) {
+  const company = body.company || 'Company';
+  const role = body.role || 'Role';
+  const type = body.type || 'hiring-manager';
+  return { ok: true, message: `Hi - I am evaluating ${role} at ${company}. Your team seems focused on exactly the kind of applied AI/automation work I have been building. Open to a quick exchange on what matters most for this role?`.slice(0, 300), type };
+}
+
+function compareOffers(body) {
+  const ids = Array.isArray(body.reportIds) ? body.reportIds : [];
+  const reports = ids.map(id => readReportById(id)).filter(Boolean);
+  const rows = reports.map(report => ({
+    id: report.id,
+    company: report.company,
+    role: report.role,
+    score: report.score || 0,
+    recommendation: (report.score || 0) >= 4 ? 'prioritize' : 'deprioritize',
+  })).sort((a, b) => b.score - a.score);
+  return { ok: true, rows };
+}
+
+function evaluateTraining(body) {
+  const title = body.title || 'Training';
+  const northStar = Number(body.northStar || 3);
+  const portfolio = Number(body.portfolio || 3);
+  const effort = Number(body.effort || 3);
+  const score = Number(((northStar * 0.45 + portfolio * 0.35 + (6 - effort) * 0.20)).toFixed(1));
+  return { ok: true, title, score, verdict: score >= 4 ? 'HACER' : score >= 3 ? 'HACER CON TIMEBOX' : 'NO HACER' };
+}
+
+function evaluateProject(body) {
+  const title = body.title || 'Project';
+  const signal = Number(body.signal || 3);
+  const demo = Number(body.demo || 3);
+  const uniqueness = Number(body.uniqueness || 3);
+  const score = Number(((signal * 0.45 + demo * 0.35 + uniqueness * 0.20)).toFixed(1));
+  return { ok: true, title, score, verdict: score >= 4 ? 'BUILD' : score >= 3 ? 'PIVOT' : 'SKIP' };
+}
+
 async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/health') {
-    const checks = {
-      cv: existsSync(userFiles.cv),
-      profile: existsSync(userFiles.profile),
-      profileMode: existsSync(userFiles.profileMode),
-      portals: existsSync(userFiles.portals),
-      applications: existsSync(userFiles.applications),
-      dataDir: existsSync(path.join(ROOT, 'data')),
-      reportsDir: existsSync(path.join(ROOT, 'reports')),
-      outputDir: existsSync(path.join(ROOT, 'output')),
-      nodeModules: existsSync(path.join(ROOT, 'node_modules')),
-    };
+    const checks = healthChecks();
     return json(res, 200, {
       version: readText(userFiles.version, 'unknown').trim(),
       checks,
       ok: Object.values(checks).every(Boolean),
       root: ROOT,
     });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/setup/readiness') {
+    const checks = healthChecks();
+    return json(res, 200, {
+      ok: Object.values(checks).every(Boolean),
+      checks,
+      missing: Object.entries(checks).filter(([, ok]) => !ok).map(([key]) => key),
+      dataContract: dataContractSummary(),
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/setup/repair') {
+    return json(res, 200, { ok: true, changedFiles: ensureSetupTemplates(), checks: healthChecks() });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/setup/doctor') {
+    const result = await commandText(process.execPath, ['doctor.mjs']);
+    return json(res, result.ok ? 200 : 500, { ok: result.ok, result });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/setup/data-contract') {
+    return json(res, 200, { ok: true, ...dataContractSummary() });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/integrity/verify') {
+    const result = await commandText(process.execPath, ['verify-pipeline.mjs']);
+    return json(res, result.ok ? 200 : 500, { ok: result.ok, result });
+  }
+
+  const integrityMatch = url.pathname.match(/^\/api\/integrity\/(normalize|dedup|merge|sync-check)$/);
+  if (integrityMatch && (req.method === 'GET' || req.method === 'POST')) {
+    const apply = req.method === 'POST';
+    const scripts = {
+      normalize: 'normalize-statuses.mjs',
+      dedup: 'dedup-tracker.mjs',
+      merge: 'merge-tracker.mjs',
+      'sync-check': 'cv-sync-check.mjs',
+    };
+    const args = [scripts[integrityMatch[1]]];
+    if (!apply && integrityMatch[1] !== 'sync-check') args.push('--dry-run');
+    const result = await commandText(process.execPath, args);
+    return json(res, result.ok ? 200 : 500, { ok: result.ok, mode: apply ? 'apply' : 'preview', result });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/profile/portals') {
+    return json(res, 200, { content: readText(userFiles.portals), parsed: yaml.load(readText(userFiles.portals, '{}')) || {} });
+  }
+
+  if (req.method === 'PUT' && url.pathname === '/api/profile/portals') {
+    const body = await parseJsonBody(req);
+    yaml.load(String(body.content || ''));
+    writeFileSync(userFiles.portals, String(body.content || ''), 'utf-8');
+    return json(res, 200, { ok: true, changedFiles: ['portals.yml'] });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/profile/language') {
+    return json(res, 200, { ok: true, ...getLanguageConfig() });
+  }
+
+  if (req.method === 'PUT' && url.pathname === '/api/profile/language') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, { ok: true, ...updateLanguageConfig(String(body.modesDir || 'modes')) });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/profile/provider-readiness') {
+    return json(res, 200, { ok: true, ...providerReadiness() });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/update/check') {
+    const result = await scriptJson(['update-system.mjs', 'check']);
+    return json(res, result.ok || result.data ? 200 : 500, { ok: Boolean(result.data), result: result.data, raw: result });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/update/preview') {
+    const fetchResult = await commandText('git', ['fetch', 'https://github.com/santifer/career-ops.git', 'main']);
+    if (!fetchResult.ok) return json(res, 500, { ok: false, result: fetchResult });
+    const diff = await commandText('git', ['diff', 'HEAD..FETCH_HEAD', '--stat', '--', 'modes/', 'CLAUDE.md', 'AGENTS.md', '*.mjs', 'batch/', 'dashboard/', 'templates/', 'docs/', 'VERSION', 'DATA_CONTRACT.md']);
+    return json(res, diff.ok ? 200 : 500, { ok: diff.ok, result: diff });
+  }
+
+  const updateAction = url.pathname.match(/^\/api\/update\/(apply|dismiss|rollback)$/);
+  if (req.method === 'POST' && updateAction) {
+    const result = await commandText(process.execPath, ['update-system.mjs', updateAction[1]]);
+    return json(res, result.ok ? 200 : 500, { ok: result.ok, result });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/applications') {
@@ -657,9 +1107,23 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/jobs/liveness') {
     const body = await parseJsonBody(req);
-    const target = String(body.url || '').trim();
-    if (!/^https?:\/\//i.test(target)) return json(res, 400, { error: 'Hace falta una URL http(s) valida.' });
+    const target = requireSafeUrl(body.url);
     return json(res, 200, await checkLiveness(target));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/jobs/liveness-bulk') {
+    const body = await parseJsonBody(req);
+    const urls = Array.isArray(body.urls) ? body.urls : [];
+    const job = createInlineJob('liveness-bulk', async ({ push }) => {
+      const results = [];
+      for (const value of urls.slice(0, 100)) {
+        const target = requireSafeUrl(value);
+        push('progress', `Verificando ${target}`);
+        results.push(await checkLiveness(target));
+      }
+      push('artifact', JSON.stringify({ results }));
+    });
+    return json(res, 202, { ok: true, jobId: job.id });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/jobs/evaluate') {
@@ -676,16 +1140,99 @@ async function handleApi(req, res, url) {
     const args = ['opencode-eval.mjs', '--file', rel];
     if (sourceUrl) args.push('--url', sourceUrl);
     if (body.preset) args.push('--preset', String(body.preset));
+    if (body.mock) args.push('--mock');
     const job = createJob('evaluate', process.execPath, args, {
-      onClose(code, jobRecord) {
+      async onClose(code, jobRecord, push) {
         if (code === 0) {
-          const merge = spawn(process.execPath, ['merge-tracker.mjs'], { cwd: ROOT, shell: false });
-          merge.stdout.on('data', d => jobRecord.logs.push({ type: 'stdout', line: String(d), at: new Date().toISOString() }));
-          merge.stderr.on('data', d => jobRecord.logs.push({ type: 'stderr', line: String(d), at: new Date().toISOString() }));
+          push('progress', 'Fusionando tracker-additions...');
+          const merge = await commandText(process.execPath, ['merge-tracker.mjs']);
+          if (merge.stdout) push('progress', merge.stdout);
+          if (merge.stderr) push('warning', merge.stderr);
+          return { code: merge.ok ? 0 : 1 };
         }
+        return { code };
       },
     });
-    return json(res, 202, { jobId: job.id, jdPath: rel });
+    return json(res, 202, { ok: true, jobId: job.id, jdPath: rel });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/jobs/cv-pdf') {
+    const body = await parseJsonBody(req);
+    const report = body.reportId ? readReportById(String(body.reportId)) : null;
+    const cvDraft = buildCvHtml({ title: body.title, jdText: body.jdText, report });
+    mkdirSync(path.join(ROOT, 'output'), { recursive: true });
+    const today = new Date().toISOString().slice(0, 10);
+    const base = `cv-${slugify(body.company || report?.company || body.title || 'draft')}-${today}`;
+    const htmlRel = `output/${base}.html`;
+    const pdfRel = `output/${base}.pdf`;
+    writeFileSync(path.join(ROOT, htmlRel), cvDraft.html, 'utf-8');
+    const format = ['a4', 'letter'].includes(String(body.format)) ? String(body.format) : 'a4';
+    const job = createJob('cv-pdf', process.execPath, ['generate-pdf.mjs', htmlRel, pdfRel, `--format=${format}`]);
+    return json(res, 202, { ok: true, jobId: job.id, htmlPath: htmlRel, outputPath: pdfRel, keywords: cvDraft.keywords });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/jobs/auto-pipeline') {
+    const body = await parseJsonBody(req);
+    const job = createInlineJob('auto-pipeline', async ({ push }) => {
+      const before = new Set(listReports().map(report => report.id));
+      let jdText = String(body.jdText || '').trim();
+      const sourceUrl = String(body.url || '').trim();
+      if (sourceUrl) {
+        const target = requireSafeUrl(sourceUrl);
+        push('progress', 'Verificando liveness');
+        const live = await checkLiveness(target);
+        push('artifact', JSON.stringify({ step: 'liveness', live }));
+        if (!jdText) {
+          push('progress', 'Extrayendo JD con Playwright');
+          jdText = await extractJobText(target);
+        }
+      }
+      if (!jdText) throw new Error('Pega un JD o indica una URL.');
+      mkdirSync(path.join(ROOT, 'jds'), { recursive: true });
+      const name = `${new Date().toISOString().slice(0, 10)}-${slugify(body.title || sourceUrl || 'job')}-${Date.now()}.txt`;
+      const rel = `jds/${name}`;
+      writeFileSync(path.join(ROOT, rel), jdText, 'utf-8');
+      push('artifact', JSON.stringify({ step: 'jd', path: rel }));
+
+      const evalArgs = ['opencode-eval.mjs', '--file', rel];
+      if (sourceUrl) evalArgs.push('--url', sourceUrl);
+      if (body.preset) evalArgs.push('--preset', String(body.preset));
+      if (body.mock) evalArgs.push('--mock');
+      push('progress', 'Ejecutando evaluacion');
+      const evaluation = await commandText(process.execPath, evalArgs, { timeout: JOB_TIMEOUT_MS });
+      if (evaluation.stdout) push('progress', evaluation.stdout);
+      if (evaluation.stderr) push('warning', evaluation.stderr);
+      if (!evaluation.ok) throw new Error(evaluation.error || 'Evaluation failed');
+
+      push('progress', 'Fusionando tracker');
+      const merge = await commandText(process.execPath, ['merge-tracker.mjs']);
+      if (merge.stdout) push('progress', merge.stdout);
+      if (!merge.ok) throw new Error(merge.error || 'Tracker merge failed');
+
+      const report = latestReportAfter(before);
+      if (report?.path) {
+        push('progress', 'Generando PDF de informe');
+        const reportPdf = await commandText(process.execPath, ['generate-report-pdf.mjs', report.path, `output/${path.basename(report.path, '.md')}.pdf`], { timeout: JOB_TIMEOUT_MS });
+        if (reportPdf.stdout) push('progress', reportPdf.stdout);
+        if (reportPdf.stderr) push('warning', reportPdf.stderr);
+
+        push('progress', 'Generando CV PDF ATS');
+        const cvDraft = buildCvHtml({ title: report.title, jdText, report: readReportById(report.id) });
+        const base = `cv-${slugify(report.company)}-${new Date().toISOString().slice(0, 10)}`;
+        const htmlRel = `output/${base}.html`;
+        const pdfRel = `output/${base}.pdf`;
+        writeFileSync(path.join(ROOT, htmlRel), cvDraft.html, 'utf-8');
+        const cvPdf = await commandText(process.execPath, ['generate-pdf.mjs', htmlRel, pdfRel, '--format=a4'], { timeout: JOB_TIMEOUT_MS });
+        if (cvPdf.stdout) push('progress', cvPdf.stdout);
+        if (cvPdf.stderr) push('warning', cvPdf.stderr);
+
+        if ((report.score || 0) >= 4.5) {
+          push('artifact', JSON.stringify({ step: 'draft-answers', draft: draftApplicationResponses({ company: report.company, role: report.role, reportSummary: report.tldr, questions: [] }).markdown }));
+        }
+        push('artifact', JSON.stringify({ step: 'completed', report: report.path, reportPdf: `output/${path.basename(report.path, '.md')}.pdf`, cvPdf: pdfRel }));
+      }
+    }, { timeoutMs: JOB_TIMEOUT_MS });
+    return json(res, 202, { ok: true, jobId: job.id });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/jobs/report-pdf') {
@@ -699,7 +1246,14 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/jobs') {
-    return json(res, 200, { jobs: [...jobs.values()].map(({ listeners, ...job }) => job) });
+    return json(res, 200, { jobs: [...jobs.values()].map(({ listeners, child, cancel, ...job }) => job) });
+  }
+
+  const cancelMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)\/cancel$/);
+  if (req.method === 'POST' && cancelMatch) {
+    const job = jobs.get(cancelMatch[1]);
+    if (!job) return json(res, 404, { error: 'Job no encontrado' });
+    return json(res, 200, { ok: job.cancel?.() ?? false, jobId: job.id, status: job.status });
   }
 
   const eventsMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)\/events$/);
@@ -740,6 +1294,56 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/learning/apply') {
     const body = await parseJsonBody(req);
     return json(res, 200, applyLearning(body));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/modules/apply-assistant') {
+    const body = await parseJsonBody(req);
+    const report = body.reportId ? readReportById(String(body.reportId)) : null;
+    return json(res, 200, { ok: true, result: draftApplicationResponses({
+      ...body,
+      company: body.company || report?.company,
+      role: body.role || report?.role,
+      reportSummary: body.reportSummary || report?.tldr,
+      basedOn: report?.id,
+      candidateSummary: 'the candidate profile and CV stored in Career-Ops',
+    }) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/modules/deep-research') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, { ok: true, markdown: moduleDeepResearchPrompt({ ...body, candidateContext: readText(userFiles.cv) }) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/modules/interview-prep') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, { ok: true, markdown: buildInterviewPrepDraft(body) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/modules/outreach') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, { ok: true, result: createLinkedInOutreachMessage(body) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/modules/offer-comparison') {
+    const body = await parseJsonBody(req);
+    const reportOffers = (Array.isArray(body.reportIds) ? body.reportIds : []).map(id => readReportById(id)).filter(Boolean).map(report => ({
+      id: report.id,
+      company: report.company,
+      role: report.role,
+      scores: { northStar: report.score || 3, cvMatch: report.score || 3, level: 3, compensation: 3, growth: 3, remote: 3, reputation: 3, techStack: 3, speed: 3, culture: 3 },
+      notes: report.tldr,
+    }));
+    return json(res, 200, { ok: true, result: moduleCompareOffers({ offers: [...reportOffers, ...(body.offers || [])] }) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/modules/training') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, { ok: true, result: moduleEvaluateTraining(body) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/modules/project') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, { ok: true, result: moduleEvaluateProject(body) });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/files') {
@@ -783,18 +1387,25 @@ async function serveStatic(req, res, url) {
   res.end(await readFile(full));
 }
 
-ensureUserDirs();
+export function createAppServer(options = {}) {
+  const host = options.host || HOST;
+  const port = Number(options.port || PORT);
+  ensureUserDirs();
+  return createServer(async (req, res) => {
+    try {
+      const requestUrl = new URL(req.url || '/', `http://${host}:${port}`);
+      if (requestUrl.pathname.startsWith('/api/')) return await handleApi(req, res, requestUrl);
+      return await serveStatic(req, res, requestUrl);
+    } catch (err) {
+      json(res, err.status || 500, { error: err.message || 'Error interno del servidor' });
+    }
+  });
+}
 
-const server = createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url || '/', `http://${HOST}:${PORT}`);
-    if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url);
-    return await serveStatic(req, res, url);
-  } catch (err) {
-    json(res, err.status || 500, { error: err.message || 'Error interno del servidor' });
-  }
-});
-
-server.listen(PORT, HOST, () => {
-  console.log(`Career-Ops web app disponible en http://${HOST}:${PORT}`);
-});
+const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isCli) {
+  const server = createAppServer({ host: HOST, port: PORT });
+  server.listen(PORT, HOST, () => {
+    console.log(`Career-Ops web app disponible en http://${HOST}:${PORT}`);
+  });
+}

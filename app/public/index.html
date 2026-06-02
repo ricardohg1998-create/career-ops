@@ -17,11 +17,11 @@
           </div>
         </div>
         <nav class="nav" aria-label="Principal">
-          <button class="nav-item active" data-view="home"><span>⌂</span> Inicio</button>
-          <button class="nav-item" data-view="inbox"><span>☑</span> Inbox</button>
-          <button class="nav-item" data-view="evaluate"><span>◇</span> Evaluar</button>
-          <button class="nav-item" data-view="tracker"><span>▦</span> Tracker</button>
-          <button class="nav-item" data-view="lab"><span>◌</span> Lab</button>
+          <button class="nav-item active" data-view="home"><span aria-hidden="true">⌂</span> Inicio</button>
+          <button class="nav-item" data-view="inbox"><span aria-hidden="true">☑</span> Inbox</button>
+          <button class="nav-item" data-view="evaluate"><span aria-hidden="true">◇</span> Evaluar</button>
+          <button class="nav-item" data-view="tracker"><span aria-hidden="true">▦</span> Tracker</button>
+          <button class="nav-item" data-view="lab"><span aria-hidden="true">◌</span> Perfil y datos</button>
         </nav>
         <div class="sidebar-foot">
           <span id="health-dot" class="dot"></span>
@@ -40,6 +40,9 @@
             <a class="ghost-btn" href="/api/health" target="_blank" rel="noreferrer">API</a>
           </div>
         </header>
+
+        <div id="fatal-error" class="app-error hidden" role="alert" aria-live="assertive" aria-atomic="true"></div>
+        <div id="mutation-feedback" class="toast-region" role="status" aria-live="polite" aria-atomic="true"></div>
 
         <div class="command-layout">
           <section class="content-stack">
@@ -66,26 +69,32 @@
 
             <section id="view-inbox" class="view">
               <div class="control-row">
-                <input id="pipeline-search" type="search" placeholder="Buscar empresa, rol o URL">
-                <select id="pipeline-filter">
+                <label class="sr-only" for="pipeline-search">Buscar en inbox por empresa, rol o URL</label>
+                <input id="pipeline-search" type="search" placeholder="Buscar empresa, rol o URL" autocomplete="off">
+                <label class="sr-only" for="pipeline-filter">Filtrar inbox</label>
+                <select id="pipeline-filter" aria-label="Filtrar inbox">
                   <option value="pending">Pendientes</option>
                   <option value="all">Todas</option>
                   <option value="duplicates">Duplicadas</option>
                   <option value="evaluated">Ya evaluadas</option>
                 </select>
-                <button id="scan-open-btn" class="ghost-btn">Escanear</button>
+                <button id="scan-open-btn" class="ghost-btn" aria-controls="scan-panel" aria-expanded="false">Escanear</button>
               </div>
-              <form id="pipeline-form" class="inline-form">
-                <input name="url" required placeholder="URL de la oferta">
-                <input name="company" placeholder="Empresa">
-                <input name="role" placeholder="Rol">
+              <form id="pipeline-form" class="inline-form" aria-label="Añadir oferta al inbox">
+                <label class="sr-only" for="pipeline-url">URL de la oferta</label>
+                <input id="pipeline-url" name="url" required placeholder="URL de la oferta" inputmode="url" autocomplete="url">
+                <label class="sr-only" for="pipeline-company">Empresa</label>
+                <input id="pipeline-company" name="company" placeholder="Empresa" autocomplete="organization">
+                <label class="sr-only" for="pipeline-role">Rol</label>
+                <input id="pipeline-role" name="role" placeholder="Rol" autocomplete="organization-title">
                 <button class="primary-btn">Añadir</button>
               </form>
               <div id="pipeline-list" class="inbox-list"></div>
               <section id="scan-panel" class="panel hidden">
                 <div class="panel-head"><h2>Escaner de portales</h2><span class="muted">Escribe en pipeline salvo simulacion.</span></div>
-                <form id="scan-form" class="inline-form">
-                  <input name="company" placeholder="Filtro por empresa">
+                <form id="scan-form" class="inline-form" aria-label="Escanear portales">
+                  <label class="sr-only" for="scan-company">Filtrar escaneo por empresa</label>
+                  <input id="scan-company" name="company" placeholder="Filtro por empresa" autocomplete="organization">
                   <label class="check"><input name="dryRun" type="checkbox" checked> Simulacion</label>
                   <label class="check"><input name="verify" type="checkbox"> Verificar activas</label>
                   <button class="primary-btn">Escanear</button>
@@ -100,19 +109,27 @@
                   <h2>Evaluar URL o JD</h2>
                   <span class="muted">Genera JD, informe y tracker. Nunca aplica por ti.</span>
                 </div>
-                <form id="evaluate-form" class="stack-form">
+                <form id="evaluate-form" class="stack-form" aria-label="Evaluar oferta">
                   <div class="form-grid">
-                    <input name="url" type="url" placeholder="URL de la oferta">
-                    <input name="title" placeholder="Etiqueta corta">
-                    <select name="preset">
+                    <label class="sr-only" for="evaluate-url">URL de la oferta</label>
+                    <input id="evaluate-url" name="url" type="url" placeholder="URL de la oferta" autocomplete="url">
+                    <label class="sr-only" for="evaluate-title">Etiqueta corta</label>
+                    <input id="evaluate-title" name="title" placeholder="Etiqueta corta">
+                    <label class="sr-only" for="evaluate-preset">Preset de evaluacion</label>
+                    <select id="evaluate-preset" name="preset" aria-label="Preset de evaluacion">
                       <option value="">Preset por defecto</option>
                       <option value="fast">Cribado rapido</option>
                       <option value="review">Revision critica</option>
                       <option value="long">Contexto largo</option>
                     </select>
                   </div>
-                  <textarea name="jdText" rows="12" placeholder="Pega aqui la descripcion de la oferta si no usas URL"></textarea>
-                  <button class="primary-btn">Evaluar oferta</button>
+                  <label class="sr-only" for="evaluate-jd">Descripcion de la oferta</label>
+                  <textarea id="evaluate-jd" name="jdText" rows="12" placeholder="Pega aqui la descripcion de la oferta si no usas URL"></textarea>
+                  <label class="check"><input name="mock" type="checkbox"> Mock opt-in</label>
+                  <div class="toolbar">
+                    <button class="primary-btn">Evaluar oferta</button>
+                    <button id="auto-pipeline-btn" class="ghost-btn" type="button">Auto-pipeline V1</button>
+                  </div>
                 </form>
               </section>
               <section class="panel">
@@ -121,8 +138,10 @@
               </section>
               <section class="report-shell">
                 <div class="control-row">
-                  <select id="report-picker"></select>
+                  <label class="sr-only" for="report-picker">Seleccionar informe</label>
+                  <select id="report-picker" aria-label="Seleccionar informe"></select>
                   <button id="generate-report-pdf" class="primary-btn">Generar PDF</button>
+                  <button id="generate-cv-pdf" class="ghost-btn">Generar CV ATS</button>
                 </div>
                 <article id="report-viewer" class="report-viewer"></article>
                 <pre id="report-log" class="job-log small"></pre>
@@ -131,9 +150,12 @@
 
             <section id="view-tracker" class="view">
               <div class="control-row">
-                <input id="application-search" type="search" placeholder="Buscar empresa, rol o notas">
-                <select id="status-filter"></select>
-                <select id="score-filter">
+                <label class="sr-only" for="application-search">Buscar aplicaciones por empresa, rol o notas</label>
+                <input id="application-search" type="search" placeholder="Buscar empresa, rol o notas" autocomplete="off">
+                <label class="sr-only" for="status-filter">Filtrar por estado</label>
+                <select id="status-filter" aria-label="Filtrar por estado"></select>
+                <label class="sr-only" for="score-filter">Filtrar por score</label>
+                <select id="score-filter" aria-label="Filtrar por score">
                   <option value="all">Todos los scores</option>
                   <option value="top">Top >=4.0</option>
                   <option value="low">Menos de 4.0</option>
@@ -143,7 +165,7 @@
             </section>
 
             <section id="view-lab" class="view">
-              <div class="tabs">
+              <div class="tabs" role="tablist" aria-label="Perfil y datos">
                 <button class="tab active" data-lab="insights">Insights</button>
                 <button class="tab" data-lab="profile">profile.yml</button>
                 <button class="tab" data-lab="cv">cv.md</button>
@@ -161,9 +183,56 @@
                     <pre id="patterns-json" class="json-box"></pre>
                   </section>
                 </div>
+                <div class="two-col v1-grid">
+                  <section class="panel">
+                    <div class="panel-head"><h2>Integridad</h2><span class="muted">Preview por defecto</span></div>
+                    <div class="detail-actions">
+                      <button class="ghost-btn" data-v1-action="/api/setup/doctor" data-v1-method="GET">Doctor</button>
+                      <button class="ghost-btn" data-v1-action="/api/integrity/verify" data-v1-method="GET">Verify</button>
+                      <button class="ghost-btn" data-v1-action="/api/integrity/normalize" data-v1-method="GET">Normalize preview</button>
+                      <button class="ghost-btn" data-v1-action="/api/integrity/dedup" data-v1-method="GET">Dedup preview</button>
+                      <button class="ghost-btn" data-v1-action="/api/integrity/merge" data-v1-method="GET">Merge preview</button>
+                      <button class="ghost-btn" data-v1-action="/api/setup/repair" data-v1-method="POST">Repair setup</button>
+                    </div>
+                    <pre id="integrity-log" class="job-log small"></pre>
+                  </section>
+                  <section class="panel">
+                    <div class="panel-head"><h2>Updates y entorno</h2><span class="muted">System Layer protegido</span></div>
+                    <div class="detail-actions">
+                      <button class="ghost-btn" data-v1-action="/api/update/check" data-v1-method="GET">Check update</button>
+                      <button class="ghost-btn" data-v1-action="/api/update/preview" data-v1-method="GET">Preview diff</button>
+                      <button class="ghost-btn" data-v1-action="/api/profile/provider-readiness" data-v1-method="GET">Providers</button>
+                      <button class="ghost-btn" data-v1-action="/api/profile/language" data-v1-method="GET">Language</button>
+                    </div>
+                    <pre id="update-log" class="job-log small"></pre>
+                  </section>
+                </div>
+                <section class="panel">
+                  <div class="panel-head"><h2>Modulos V1</h2><span class="muted">Borradores, nunca submit automatico</span></div>
+                  <form id="module-form" class="stack-form">
+                    <div class="form-grid">
+                      <label class="sr-only" for="module-kind">Modulo</label>
+                      <select id="module-kind" name="kind" aria-label="Modulo V1">
+                        <option value="apply-assistant">Apply assistant</option>
+                        <option value="deep-research">Deep research</option>
+                        <option value="interview-prep">Interview prep</option>
+                        <option value="outreach">LinkedIn outreach</option>
+                        <option value="offer-comparison">Comparar ofertas</option>
+                        <option value="training">Training</option>
+                        <option value="project">Project</option>
+                      </select>
+                      <input name="company" placeholder="Empresa">
+                      <input name="role" placeholder="Rol">
+                    </div>
+                    <textarea name="notes" rows="5" placeholder="Preguntas, contexto, IDs de reports separados por coma, o notas"></textarea>
+                    <button class="primary-btn">Generar modulo</button>
+                  </form>
+                  <pre id="module-output" class="json-box"></pre>
+                </section>
               </section>
               <section id="lab-editor" class="lab-pane">
-                <textarea id="editor" class="editor" spellcheck="false"></textarea>
+                <label class="sr-only" for="editor">Editor de archivo de perfil</label>
+                <textarea id="editor" class="editor" spellcheck="false" aria-label="Editor de archivo de perfil"></textarea>
                 <div class="editor-actions">
                   <button id="save-editor" class="primary-btn">Guardar cambios</button>
                   <span id="editor-status" class="muted"></span>
@@ -183,12 +252,14 @@
       <form method="dialog" class="dialog-body">
         <h2>Guardar aprendizaje</h2>
         <p class="muted">Revisa antes de escribir. Solo se guardara en archivos de usuario.</p>
-        <select id="learning-destination">
+        <label class="sr-only" for="learning-destination">Destino del aprendizaje</label>
+        <select id="learning-destination" aria-label="Destino del aprendizaje">
           <option value="profileMode">modes/_profile.md</option>
           <option value="articleDigest">article-digest.md</option>
           <option value="profile">config/profile.yml</option>
         </select>
-        <textarea id="learning-content" rows="10"></textarea>
+        <label class="sr-only" for="learning-content">Contenido del aprendizaje</label>
+        <textarea id="learning-content" rows="10" aria-label="Contenido del aprendizaje"></textarea>
         <div class="dialog-actions">
           <button value="cancel" class="ghost-btn">Cancelar</button>
           <button id="confirm-learning" value="default" class="primary-btn">Guardar</button>

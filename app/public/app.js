@@ -4,9 +4,9 @@ import { state, statusLabels, viewTitles, moduleLabels, modeLabels, stepLabels }
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    UTILITIES
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function notify(message, type = 'ok') {
   const box = $('#mutation-feedback');
@@ -41,7 +41,7 @@ function mdToHtml(markdown = '') {
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
-    .replace(/^\s*[-*]\s+(.+)$/gm, '<p class="bullet">â€¢ $1</p>')
+    .replace(/^\s*[-*]\s+(.+)$/gm, '<p class="bullet">• $1</p>')
     .replace(/\n{2,}/g, '<br><br>')
     .replace(/\n/g, '<br>');
 }
@@ -120,9 +120,9 @@ function scoreClass(score) {
   return '';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    NAVIGATION
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 const viewAliases = { inbox: 'opportunities', lab: 'dossier' };
 
@@ -145,12 +145,21 @@ function setView(name) {
   renderDetail();
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+function openScanPanel() {
+  const panel = $('#scan-panel');
+  const button = $('#scan-open-btn');
+  if (!panel) return;
+  panel.classList.remove('hidden');
+  button?.setAttribute('aria-expanded', 'true');
+  panel.scrollIntoView({ block: 'nearest' });
+}
+
+/* ═══════════════════════════════════════════
    DATA LOADING
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 async function loadAll() {
-  const [health, apps, pipeline, reports, jobs, nextActions, scanner] = await Promise.all([
+  const [health, apps, pipeline, reports, jobs, nextActions, scanner, scannerSchedule] = await Promise.all([
     api('/api/health'),
     api('/api/applications'),
     api('/api/pipeline'),
@@ -158,9 +167,11 @@ async function loadAll() {
     api('/api/jobs'),
     api('/api/next-actions'),
     api('/api/scanner/discovery'),
+    api('/api/scanner/schedule'),
   ]);
   state.health = health;
   state.applications = apps.applications;
+  state.applicationEvents = apps.events || [];
   state.metrics = apps.metrics;
   state.states = apps.states;
   state.pipeline = pipeline.entries;
@@ -168,6 +179,7 @@ async function loadAll() {
   state.jobs = jobs.jobs;
   state.nextActions = nextActions.actions || [];
   state.scanner = scanner;
+  state.scannerSchedule = scannerSchedule;
   renderAll();
 }
 
@@ -175,21 +187,22 @@ function renderAll() {
   renderHealth();
   renderHome();
   renderOpportunities();
+  renderScannerSchedule();
   renderApplications();
   renderReports();
   renderJobsHint();
   renderDetail();
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    HEALTH
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function renderHealth() {
   const labels = {
     cv: 'CV',
     profile: 'Perfil',
-    profileMode: 'PersonalizaciÃ³n',
+    profileMode: 'Personalización',
     portals: 'Portales',
     applications: 'Tracker',
     dataDir: 'Datos',
@@ -200,18 +213,18 @@ function renderHealth() {
   const dot = $('#health-dot');
   dot.classList.toggle('ok', state.health?.ok);
   dot.classList.toggle('bad', !state.health?.ok);
-  $('#health-label').textContent = state.health?.ok ? `Listo Â· v${state.health.version}` : 'Setup incompleto';
+  $('#health-label').textContent = state.health?.ok ? `Listo · v${state.health.version}` : 'Setup incompleto';
   $('#health-list').innerHTML = Object.entries(state.health?.checks || {}).map(([key, ok]) => `
     <div class="check-item">
-      <strong>${ok ? 'âœ“' : 'Ã—'} ${escapeHtml(labels[key] || key)}</strong>
+      <strong>${ok ? '✓' : 'x'} ${escapeHtml(labels[key] || key)}</strong>
       <span>${ok ? 'Correcto' : 'Falta'}</span>
     </div>
   `).join('');
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    HOME
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function renderHome() {
   const m = state.metrics || {};
@@ -227,7 +240,7 @@ function renderHome() {
 
   renderNorthStar();
   const serverActions = (state.nextActions || []).slice(1, 8).map(renderNextAction);
-  $('#priority-list').innerHTML = serverActions.join('') || `<div class="empty-state"><span class="empty-icon">â—‡</span><span class="empty-title">Sin acciones urgentes</span><span class="empty-subtitle">Buen momento para escanear portales o revisar patrones.</span></div>`;
+  $('#priority-list').innerHTML = serverActions.join('') || `<div class="empty-state"><span class="empty-icon">◇</span><span class="empty-title">Sin acciones urgentes</span><span class="empty-subtitle">Buen momento para escanear portales o revisar patrones.</span></div>`;
   renderFollowupSummary();
   return;
 
@@ -237,9 +250,9 @@ function renderHome() {
   const actions = [
     ...top.map(app => nextActionApp(app, 'Revisar candidatura', 'Alta afinidad: decide si merece CV y dossier.')),
     ...pendingItems.map(item => nextActionPipeline(item)),
-    ...low.map(app => nextActionApp(app, 'Descartar o justificar', 'Score bajo: no aplicar salvo una razÃ³n estratÃ©gica fuerte.')),
+    ...low.map(app => nextActionApp(app, 'Descartar o justificar', 'Score bajo: no aplicar salvo una razón estratégica fuerte.')),
   ].slice(0, 7);
-  $('#priority-list').innerHTML = actions.join('') || `<div class="empty-state"><span class="empty-icon">â—‡</span><span class="empty-title">Sin acciones urgentes</span><span class="empty-subtitle">Buen momento para escanear portales o revisar patrones.</span></div>`;
+  $('#priority-list').innerHTML = actions.join('') || `<div class="empty-state"><span class="empty-icon">◇</span><span class="empty-title">Sin acciones urgentes</span><span class="empty-subtitle">Buen momento para escanear portales o revisar patrones.</span></div>`;
   renderFollowupSummary();
 }
 
@@ -268,13 +281,13 @@ function renderNorthStar() {
         <span>${escapeHtml(action.safety || 'Revision humana antes de enviar o aplicar.')}</span>
       </div>
     </div>
-    <button class="primary-btn" ${action.targetView ? `data-jump="${escapeHtml(action.targetView)}"` : ''} ${action.selectKind === 'app' ? `data-select-app="${escapeHtml(action.selectId)}"` : ''} ${action.selectKind === 'pipeline' ? `data-select-pipeline="${escapeHtml(action.selectId)}"` : ''}>${escapeHtml(action.primaryAction || 'Abrir')}</button>
+    <button class="primary-btn" ${action.targetView ? `data-jump="${escapeHtml(action.targetView)}"` : ''} ${action.selectKind === 'app' ? `data-select-app="${escapeHtml(action.selectId)}"` : ''} ${action.selectKind === 'pipeline' ? `data-select-pipeline="${escapeHtml(action.selectId)}"` : ''} ${action.openScanPanel ? 'data-open-scan-panel' : ''}>${escapeHtml(action.primaryAction || 'Abrir')}</button>
   `;
 }
 
 function renderNextAction(action) {
   return `
-    <button class="decision-item" ${action.targetView ? `data-jump="${escapeHtml(action.targetView)}"` : ''} ${action.selectKind === 'app' ? `data-select-app="${escapeHtml(action.selectId)}"` : ''} ${action.selectKind === 'pipeline' ? `data-select-pipeline="${escapeHtml(action.selectId)}"` : ''}>
+    <button class="decision-item" ${action.targetView ? `data-jump="${escapeHtml(action.targetView)}"` : ''} ${action.selectKind === 'app' ? `data-select-app="${escapeHtml(action.selectId)}"` : ''} ${action.selectKind === 'pipeline' ? `data-select-pipeline="${escapeHtml(action.selectId)}"` : ''} ${action.openScanPanel ? 'data-open-scan-panel' : ''}>
       <span class="score-pill ${scoreClass(Number.parseFloat(action.score))}">${escapeHtml(action.score || action.recommendation || action.type || 'accion')}</span>
       <strong>${escapeHtml(action.headline || action.label)}</strong>
       <span>${escapeHtml([action.company, action.role].filter(Boolean).join(' - ') || action.label || '')}</span>
@@ -288,7 +301,7 @@ function nextActionApp(app, action, reason) {
     <button class="decision-item" data-select-app="${app.number}" data-jump="tracker">
       <span class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</span>
       <strong>${escapeHtml(action)}</strong>
-      <span>${escapeHtml(app.company)} Â· ${escapeHtml(app.role)}</span>
+      <span>${escapeHtml(app.company)} · ${escapeHtml(app.role)}</span>
       <em>${escapeHtml(reason)}</em>
     </button>
   `;
@@ -299,8 +312,8 @@ function nextActionPipeline(item) {
     <button class="decision-item" data-select-pipeline="${item.id}" data-jump="opportunities">
       <span class="score-pill">URL</span>
       <strong>Evaluar oportunidad</strong>
-      <span>${escapeHtml(item.company || item.sourceHost || 'Cola')} Â· ${escapeHtml(item.role || item.url)}</span>
-      <em>Pendiente de scoring, legitimidad y siguiente decisiÃ³n.</em>
+      <span>${escapeHtml(item.company || item.sourceHost || 'Cola')} · ${escapeHtml(item.role || item.url)}</span>
+      <em>Pendiente de scoring, legitimidad y siguiente decisión.</em>
     </button>
   `;
 }
@@ -353,27 +366,27 @@ function extractFollowupItems(data) {
 
 function renderFollowupItem(item) {
   const urgency = item.urgency || 'upcoming';
-  const icon = urgency === 'overdue' ? 'âš ' : urgency === 'due' ? 'â—Ž' : 'â—‡';
-  const label = urgency === 'overdue' ? 'Vencido' : urgency === 'due' ? 'Pendiente' : 'PrÃ³ximo';
+  const icon = urgency === 'overdue' ? '⚠' : urgency === 'due' ? '◎' : '◇';
+  const label = urgency === 'overdue' ? 'Vencido' : urgency === 'due' ? 'Pendiente' : 'Próximo';
   const company = item.company || item.Company || '';
   const role = item.role || item.Role || '';
   const days = item.daysSinceLastFollowup ?? item.daysSinceApplication ?? item.daysSinceContact ?? item.days ?? '';
-  const nextDate = item.nextFollowupDate ? ` Â· prÃ³ximo ${escapeHtml(item.nextFollowupDate)}` : '';
+  const nextDate = item.nextFollowupDate ? ` · próximo ${escapeHtml(item.nextFollowupDate)}` : '';
   const action = item.recommendedAction || item.action || item.nextAction || (urgency === 'overdue' ? 'preparar seguimiento' : '');
   return `
     <div class="insight-item ${urgency}">
       <span class="insight-icon">${icon}</span>
       <div class="insight-body">
-        <span class="insight-title">${escapeHtml(company)}${role ? ` â€” ${escapeHtml(role)}` : ''}</span>
-        <span class="insight-meta">${escapeHtml(label)}${days !== '' && days !== null ? ` Â· ${escapeHtml(days)} dÃ­as` : ''}${nextDate}${action ? ` Â· ${escapeHtml(action)}` : ''}</span>
+        <span class="insight-title">${escapeHtml(company)}${role ? ` — ${escapeHtml(role)}` : ''}</span>
+        <span class="insight-meta">${escapeHtml(label)}${days !== '' && days !== null ? ` · ${escapeHtml(days)} días` : ''}${nextDate}${action ? ` · ${escapeHtml(action)}` : ''}</span>
       </div>
     </div>
   `;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    OPORTUNIDADES
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function renderOpportunities() {
   const query = ($('#pipeline-search')?.value || '').toLowerCase();
@@ -400,12 +413,12 @@ function renderOpportunities() {
         ${item.sourceHost ? `<em class="chip">${escapeHtml(item.sourceHost)}</em>` : ''}
       </span>
     </button>
-  `).join('') || '<div class="empty-state"><span class="empty-icon">â—Ž</span><span class="empty-title">Sin entradas</span><span class="empty-subtitle">No hay entradas para este filtro.</span></div>';
+  `).join('') || '<div class="empty-state"><span class="empty-icon">◎</span><span class="empty-title">Sin entradas</span><span class="empty-subtitle">No hay entradas para este filtro.</span></div>';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    TRACKER
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function discoveryStateLabel(stateValue = '') {
   return {
@@ -459,7 +472,7 @@ function renderScannerDiscovery() {
           <div class="discovery-main">
             <strong>${escapeHtml(entry.company || entry.sourceHost || 'Sin empresa')}</strong>
             <span>${escapeHtml(entry.title || entry.url)}</span>
-            <small>${escapeHtml([entry.firstSeen, entry.location, entry.portal].filter(Boolean).join(' Â· '))}</small>
+            <small>${escapeHtml([entry.firstSeen, entry.location, entry.portal].filter(Boolean).join(' · '))}</small>
           </div>
           <div class="discovery-meta">
             <em class="chip ${discoveryStateClass(entry.state)}">${escapeHtml(discoveryStateLabel(entry.state))}</em>
@@ -468,7 +481,7 @@ function renderScannerDiscovery() {
           </div>
           <div class="discovery-action">${renderDiscoveryAction(entry)}</div>
         </div>
-      `).join('') || '<div class="empty-state"><span class="empty-icon">â—‡</span><span class="empty-title">Sin historial de escaneo</span><span class="empty-subtitle">Ejecuta un escaneo para importar ofertas automaticamente.</span></div>'}
+      `).join('') || '<div class="empty-state"><span class="empty-icon">◇</span><span class="empty-title">Sin historial de escaneo</span><span class="empty-subtitle">Ejecuta un escaneo para importar ofertas automaticamente.</span></div>'}
     </div>
   `;
 }
@@ -482,6 +495,76 @@ async function importDiscoveryOffer(id) {
   });
   notify('Oferta reimportada a oportunidades');
   await loadAll();
+}
+
+function renderScannerSchedule() {
+  const box = $('#scan-schedule-card');
+  if (!box) return;
+  const schedule = state.scannerSchedule || {};
+  const status = schedule.enabled
+    ? schedule.due
+      ? 'Vence ahora'
+      : `Proximo scan: ${schedule.nextScanDate || 'sin historial'}`
+    : 'Rutina desactivada';
+  box.innerHTML = `
+    <form id="scan-schedule-form" class="scan-schedule-form" aria-label="Rutina de discovery">
+      <div class="scan-schedule-head">
+        <div>
+          <span class="action-kicker">Discovery recurrente</span>
+          <h3>Rutina de escaneo</h3>
+          <p>${escapeHtml(status)}${schedule.lastScanDate ? ` - ultimo ${escapeHtml(schedule.lastScanDate)}` : ''}</p>
+        </div>
+        <label class="check"><input name="enabled" type="checkbox" ${schedule.enabled ? 'checked' : ''}> Activa</label>
+      </div>
+      <div class="scan-schedule-grid">
+        <label class="field-label">Cada dias<input name="frequencyDays" type="number" min="1" max="30" value="${escapeHtml(schedule.frequencyDays || 3)}"></label>
+        <label class="field-label">Empresa opcional<input name="company" value="${escapeHtml(schedule.company || '')}" placeholder="Todas"></label>
+        <label class="check"><input name="dryRun" type="checkbox" ${schedule.dryRun !== false ? 'checked' : ''}> Simulacion</label>
+        <label class="check"><input name="verify" type="checkbox" ${schedule.verify ? 'checked' : ''}> Verificar activas</label>
+      </div>
+      <div class="scan-command-row">
+        <code>${escapeHtml(schedule.command || 'node scan.mjs --dry-run')}</code>
+        <div class="toolbar">
+          <button class="ghost-btn" type="submit">Guardar rutina</button>
+          <button class="primary-btn" type="button" data-run-scheduled-scan>Ejecutar ahora</button>
+        </div>
+      </div>
+    </form>
+  `;
+}
+
+async function saveScannerSchedule(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  state.scannerSchedule = await api('/api/scanner/schedule', {
+    method: 'PUT',
+    body: {
+      enabled: data.has('enabled'),
+      frequencyDays: data.get('frequencyDays'),
+      company: data.get('company'),
+      dryRun: data.has('dryRun'),
+      verify: data.has('verify'),
+    },
+  });
+  renderScannerSchedule();
+  state.nextActions = (await api('/api/next-actions')).actions || [];
+  renderHome();
+  notify('Rutina de discovery guardada');
+}
+
+async function runScheduledScan() {
+  const schedule = state.scannerSchedule || {};
+  const result = await api('/api/jobs/scan', {
+    method: 'POST',
+    body: {
+      company: schedule.company || '',
+      dryRun: schedule.dryRun !== false,
+      verify: Boolean(schedule.verify),
+    },
+  });
+  streamReturnedJob(result, '#scan-log');
+  notify(`Escaneo de rutina iniciado: ${result.jobId}`);
 }
 
 function renderApplications() {
@@ -503,29 +586,29 @@ function renderApplications() {
   });
   $('#applications-table').innerHTML = `
     <div class="table-head">
-      <span>#</span><span>Empresa / rol</span><span>PuntuaciÃ³n</span><span>Estado</span><span>DecisiÃ³n</span>
+      <span>#</span><span>Empresa / rol</span><span>Puntuación</span><span>Estado</span><span>Decisión</span>
     </div>
     ${rows.map(app => `
       <button class="table-row ${state.selected.kind === 'app' && String(state.selected.id) === String(app.number) ? 'selected' : ''}" data-select-app="${app.number}">
         <span data-label="#">${app.number}</span>
         <span data-label="Empresa / rol"><strong>${escapeHtml(app.company)}</strong><small>${escapeHtml(app.role)}</small></span>
-        <span data-label="PuntuaciÃ³n"><em class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</em></span>
+        <span data-label="Puntuación"><em class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</em></span>
         <span data-label="Estado"><em class="chip">${escapeHtml(statusLabels[app.status] || app.status)}</em></span>
-        <span data-label="DecisiÃ³n">${app.score < 4 ? '<em class="chip bad">descartar</em>' : '<em class="chip good">revisar</em>'}</span>
+        <span data-label="Decisión">${app.score < 4 ? '<em class="chip bad">descartar</em>' : '<em class="chip good">revisar</em>'}</span>
       </button>
     `).join('')}
   `;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    REPORTS
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function renderReports() {
   const selected = state.loadedReport?.id || state.reports[0]?.id || '';
   $('#report-picker').innerHTML = state.reports.map(report => `
     <option value="${escapeHtml(report.id)}" ${report.id === selected ? 'selected' : ''}>
-      ${escapeHtml(report.id)} Â· ${escapeHtml(report.company || report.title)}
+      ${escapeHtml(report.id)} · ${escapeHtml(report.company || report.title)}
     </option>
   `).join('');
 }
@@ -535,9 +618,9 @@ function renderJobsHint() {
   $('#evaluate-status').textContent = running.length ? `${running.length} trabajos activos` : '';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    LOGS
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function appendLog(selector, message, reset = false) {
   const log = $(selector);
@@ -546,9 +629,9 @@ function appendLog(selector, message, reset = false) {
   log.scrollTop = log.scrollHeight;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    SELECTION
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function selectPipeline(id) {
   if (id === undefined || id === null) return;
@@ -661,9 +744,9 @@ function hydrateAssistantsFromSelection(kind = null, mode = null) {
   form.dataset.contextKey = key;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    REPORT VIEWER
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function renderReportViewer(report) {
   const sections = report.sections || {};
@@ -671,7 +754,7 @@ function renderReportViewer(report) {
     ['Resumen', sections.roleSummary || report.tldr],
     ['Match', sections.match],
     ['Estrategia', sections.strategy],
-    ['CompensaciÃ³n', sections.comp],
+    ['Compensación', sections.comp],
     ['CV / LinkedIn', sections.customization],
     ['Entrevista', sections.interview],
     ['Legitimidad', sections.legitimacy],
@@ -681,7 +764,7 @@ function renderReportViewer(report) {
       <div>
         <p class="eyebrow">${escapeHtml(report.company || 'Informe')}</p>
         <h2>${escapeHtml(report.role || report.title)}</h2>
-        <p>${escapeHtml(report.tldr || 'Sin TL;DR extraÃ­do.')}</p>
+        <p>${escapeHtml(report.tldr || 'Sin TL;DR extraído.')}</p>
       </div>
       <span class="score-tower ${scoreClass(report.score)}">${escapeHtml(report.scoreRaw || 'n/a')}</span>
     </header>
@@ -696,9 +779,9 @@ function renderReportViewer(report) {
   `;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    DETAIL PANEL
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function renderDetail() {
   const box = $('#detail-panel');
@@ -707,8 +790,8 @@ function renderDetail() {
   if (state.selected.kind === 'report') return renderReportDetail(box);
   box.innerHTML = `
     <p class="eyebrow">Centro de decisiones</p>
-    <h2>DecisiÃ³n primero</h2>
-    <p class="muted">Selecciona una oferta, una aplicaciÃ³n o un informe para ver acciones contextuales.</p>
+    <h2>Decisión primero</h2>
+    <p class="muted">Selecciona una oferta, una aplicación o un informe para ver acciones contextuales.</p>
     <div class="detail-stat"><strong>${state.pipeline.filter(i => !i.done).length}</strong><span>pendientes en oportunidades</span></div>
     <div class="detail-stat"><strong>${state.applications.filter(a => a.score >= 4 && a.status === 'Evaluated').length}</strong><span>alta prioridad pendientes de decidir</span></div>
   `;
@@ -728,18 +811,54 @@ function renderPipelineDetail(box) {
     <dl class="detail-list">
       <dt>URL</dt><dd><a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.sourceHost || item.url)}</a></dd>
       <dt>Estado</dt><dd>${item.done ? 'Marcada como hecha' : 'Pendiente'}</dd>
-      <dt>SeÃ±ales</dt><dd>${[
+      <dt>Señales</dt><dd>${[
         item.duplicateCandidate ? 'posible duplicada' : '',
         item.evaluatedCandidate ? 'ya evaluada' : '',
         live ? `liveness: ${live.result}` : '',
-      ].filter(Boolean).join(' Â· ') || 'sin alertas'}</dd>
+      ].filter(Boolean).join(' · ') || 'sin alertas'}</dd>
     </dl>
+    ${renderOpportunityConsole(item, live)}
     <div class="detail-actions">
       <button class="primary-btn" data-evaluate-pipeline="${item.id}">Evaluar</button>
       <button class="ghost-btn" data-liveness-pipeline="${item.id}">Verificar activa</button>
       <button class="ghost-btn" data-toggle-pipeline="${item.id}">${item.done ? 'Reabrir' : 'Marcar hecha'}</button>
       <button class="danger-btn" data-delete-pipeline="${item.id}">Eliminar</button>
     </div>
+  `;
+}
+
+function renderOpportunityConsole(item = {}, live = null) {
+  const verifiedLive = live?.result === 'active';
+  const blocked = item.done || item.duplicateCandidate || item.evaluatedCandidate || live?.result === 'expired';
+  const recommendation = blocked ? 'Review' : (verifiedLive ? 'Evaluate' : 'Verify');
+  const text = blocked
+    ? 'Hay una senal que conviene resolver antes de invertir tiempo en materiales.'
+    : verifiedLive
+      ? 'La oferta parece activa. El siguiente paso de mayor valor es calcular score, legitimidad y decision.'
+      : 'Primero confirma que la oferta sigue viva; despues evalua y prepara materiales solo si merece la pena.';
+  const readiness = [
+    { label: 'Oferta localizada', ok: Boolean(item.url), detail: item.url || 'Falta URL' },
+    { label: 'Vigencia verificada', ok: verifiedLive, detail: live ? `Resultado: ${live.result}` : 'Pendiente de verificacion con Playwright' },
+    { label: 'Sin duplicados', ok: !item.duplicateCandidate && !item.evaluatedCandidate, detail: item.evaluatedCandidate ? 'Parece ya evaluada' : item.duplicateCandidate ? 'Posible duplicada' : 'Sin alerta de duplicado' },
+    { label: 'Score calculado', ok: false, detail: 'Pendiente de Evaluacion 360' },
+    { label: 'Revision humana', ok: false, detail: 'Pendiente antes de enviar o aplicar' },
+  ];
+  return `
+    <section class="application-console opportunity-console">
+      <div class="console-head">
+        <span class="action-kicker">${recommendation}</span>
+        <h3>Decision de oportunidad</h3>
+        <p>${escapeHtml(text)}</p>
+      </div>
+      ${renderReadinessList(readiness)}
+      <div class="console-actions">
+        <button class="primary-btn" data-evaluate-pipeline="${item.id}">Evaluar oferta</button>
+        <button class="ghost-btn" data-liveness-pipeline="${item.id}">Verificar activa</button>
+        <button class="ghost-btn" data-open-assistant="form-reader" data-assistant-mode="draft">Buscar formulario</button>
+        <button class="ghost-btn" data-open-assistant="apply-assistant" data-assistant-mode="draft">Preparar respuestas</button>
+      </div>
+      <p class="console-guardrail">Primero se decide si merece la pena. Career-Ops puede preparar y rellenar campos seguros, pero siempre se detiene antes del envio final.</p>
+    </section>
   `;
 }
 
@@ -831,6 +950,59 @@ function renderApplicationConsole(item = {}) {
   `;
 }
 
+function renderOutcomeJournal(app = {}) {
+  const recent = (state.applicationEvents || [])
+    .filter(event => Number(event.application) === Number(app.number))
+    .slice(0, 3);
+  return `
+    <section class="outcome-journal">
+      <div class="console-head">
+        <span class="action-kicker">Post-apply</span>
+        <h3>Registrar decision o resultado</h3>
+        <p>Guarda solo lo que hayas confirmado: envio real, rechazo, entrevista, descarte, notas y proximo paso.</p>
+      </div>
+      <form class="outcome-form" data-outcome-form="${app.number}">
+        <div class="outcome-grid">
+          <label class="field-label">Estado
+            <select name="status">
+              ${state.states.map(s => `<option value="${escapeHtml(s.label)}" ${s.label === app.status ? 'selected' : ''}>${escapeHtml(statusLabels[s.label] || s.label)}</option>`).join('')}
+            </select>
+          </label>
+          <label class="field-label">Resultado
+            <select name="outcome">
+              <option value="applied">Aplicacion enviada</option>
+              <option value="discarded">Descartada por candidato</option>
+              <option value="rejected">Rechazo recibido</option>
+              <option value="interview">Entrevista agendada</option>
+              <option value="follow_up">Seguimiento preparado</option>
+              <option value="note">Nota de decision</option>
+            </select>
+          </label>
+          <label class="field-label">Follow-up
+            <input name="followUpDate" type="date">
+          </label>
+        </div>
+        <textarea name="finalAnswers" rows="4" placeholder="Respuestas finales enviadas o notas del formulario. No pegues datos sensibles innecesarios."></textarea>
+        <textarea name="notes" rows="3" placeholder="Que paso, por que se tomo la decision y que debe aprender Career-Ops"></textarea>
+        <div class="scan-command-row">
+          <input name="nextAction" placeholder="Siguiente accion: seguimiento, preparar entrevista, esperar respuesta...">
+          <button class="primary-btn">Guardar resultado</button>
+        </div>
+      </form>
+      <div class="event-list">
+        ${recent.map(event => `
+          <div class="event-item">
+            <strong>${escapeHtml(event.date)} - ${escapeHtml(event.outcome || event.status || 'evento')}</strong>
+            <span>${escapeHtml([event.status, event.nextAction, event.followUpDate].filter(Boolean).join(' - '))}</span>
+            ${event.notes ? `<em>${escapeHtml(event.notes)}</em>` : ''}
+          </div>
+        `).join('') || '<div class="empty">Sin resultados registrados todavia.</div>'}
+      </div>
+      <p class="console-guardrail">Este registro no envia nada. Solo actualiza tu tracker y escribe en <code>data/application-events.md</code>.</p>
+    </section>
+  `;
+}
+
 function renderApplicationDetail(box) {
   const app = state.applications.find(row => row.number === state.selected.id);
   if (!app) {
@@ -843,14 +1015,15 @@ function renderApplicationDetail(box) {
     <p>${escapeHtml(app.role)}</p>
     <div class="score-panel ${scoreClass(app.score)}">
       <strong>${escapeHtml(app.scoreRaw || 'n/a')}</strong>
-      <span>${app.score < 4 ? 'RecomendaciÃ³n: no aplicar salvo razÃ³n fuerte.' : 'Lista para decisiÃ³n humana.'}</span>
+      <span>${app.score < 4 ? 'Recomendación: no aplicar salvo razón fuerte.' : 'Lista para decisión humana.'}</span>
     </div>
     <dl class="detail-list">
       <dt>Estado</dt><dd>${escapeHtml(statusLabels[app.status] || app.status)}</dd>
-      <dt>Legitimidad</dt><dd>${escapeHtml(app.legitimacy || 'No extraÃ­da')}</dd>
+      <dt>Legitimidad</dt><dd>${escapeHtml(app.legitimacy || 'No extraída')}</dd>
       <dt>Notas</dt><dd>${escapeHtml(app.notes || 'Sin notas')}</dd>
     </dl>
     ${renderApplicationConsole(app)}
+    ${renderOutcomeJournal(app)}
     <label class="field-label">Cambiar estado</label>
     <select data-status-detail="${app.number}">
       ${state.states.map(s => `<option value="${escapeHtml(s.label)}" ${s.label === app.status ? 'selected' : ''}>${escapeHtml(statusLabels[s.label] || s.label)}</option>`).join('')}
@@ -878,7 +1051,7 @@ function renderReportDetail(box) {
     <p>${escapeHtml(report.role || report.tldr || '')}</p>
     <div class="score-panel ${scoreClass(report.score)}">
       <strong>${escapeHtml(report.scoreRaw || 'n/a')}</strong>
-      <span>${escapeHtml(report.legitimacy || 'Legitimidad no extraÃ­da')}</span>
+      <span>${escapeHtml(report.legitimacy || 'Legitimidad no extraída')}</span>
     </div>
     <dl class="detail-list">
       <dt>Fecha</dt><dd>${escapeHtml(report.date || 'n/a')}</dd>
@@ -889,7 +1062,7 @@ function renderReportDetail(box) {
     <div class="detail-actions">
       <button class="primary-btn" data-report-pdf="${escapeHtml(report.path)}">Generar PDF</button>
       <button class="ghost-btn" data-open-assistant="apply-assistant">Aplicar asistido</button>
-      <button class="ghost-btn" data-open-assistant="deep-research">InvestigaciÃ³n</button>
+      <button class="ghost-btn" data-open-assistant="deep-research">Investigación</button>
       <button class="ghost-btn" data-open-assistant="interview-prep">Entrevista</button>
       ${report.url ? `<a class="ghost-btn" href="${escapeHtml(report.url)}" target="_blank" rel="noreferrer">Oferta</a>` : ''}
       <button class="ghost-btn" data-learning-report="${escapeHtml(report.id)}">Guardar aprendizaje</button>
@@ -897,9 +1070,9 @@ function renderReportDetail(box) {
   `;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    EDITOR (Profile view)
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 async function loadEditor() {
   const [profile, cv, personalization, scannerStrategy] = await Promise.all([
@@ -929,9 +1102,9 @@ async function saveEditor() {
   notify('Cambios guardados en User Layer');
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   INSIGHTS (Profile â†’ Resumen tab)
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════════════════════════════
+   INSIGHTS (Profile → Resumen tab)
+   ═══════════════════════════════════════════ */
 
 function listToText(list = []) {
   return (list || []).join('\n');
@@ -1034,10 +1207,10 @@ function renderPatternsInsight() {
   if (archetypes.length) {
     cards.push(`
       <div class="insight-item">
-        <span class="insight-icon">â—†</span>
+        <span class="insight-icon">◆</span>
         <div class="insight-body">
-          <span class="insight-title">Arquetipos mÃ¡s frecuentes</span>
-          <span class="insight-meta">${archetypes.map(a => escapeHtml(typeof a === 'string' ? a : `${a.name || a.archetype} (${a.count || a.percentage || ''})`)).join(' Â· ')}</span>
+          <span class="insight-title">Arquetipos más frecuentes</span>
+          <span class="insight-meta">${archetypes.map(a => escapeHtml(typeof a === 'string' ? a : `${a.name || a.archetype} (${a.count || a.percentage || ''})`)).join(' · ')}</span>
         </div>
       </div>
     `);
@@ -1049,10 +1222,10 @@ function renderPatternsInsight() {
   if (scoreEntries.length) {
     cards.push(`
       <div class="insight-item">
-        <span class="insight-icon">â–¦</span>
+        <span class="insight-icon">▦</span>
         <div class="insight-body">
-          <span class="insight-title">DistribuciÃ³n de scores</span>
-          <span class="insight-meta">${scoreEntries.map(([k, v]) => `${escapeHtml(k)}: ${v}`).join(' Â· ')}</span>
+          <span class="insight-title">Distribución de scores</span>
+          <span class="insight-meta">${scoreEntries.map(([k, v]) => `${escapeHtml(k)}: ${v}`).join(' · ')}</span>
         </div>
       </div>
     `);
@@ -1064,10 +1237,10 @@ function renderPatternsInsight() {
   if (statusEntries.length) {
     cards.push(`
       <div class="insight-item">
-        <span class="insight-icon">â—‰</span>
+        <span class="insight-icon">◉</span>
         <div class="insight-body">
-          <span class="insight-title">DistribuciÃ³n de estados</span>
-          <span class="insight-meta">${statusEntries.map(([k, v]) => `${escapeHtml(statusLabels[k] || k)}: ${v}`).join(' Â· ')}</span>
+          <span class="insight-title">Distribución de estados</span>
+          <span class="insight-meta">${statusEntries.map(([k, v]) => `${escapeHtml(statusLabels[k] || k)}: ${v}`).join(' · ')}</span>
         </div>
       </div>
     `);
@@ -1078,10 +1251,10 @@ function renderPatternsInsight() {
   if (rejections.length) {
     cards.push(`
       <div class="insight-item">
-        <span class="insight-icon">âœ•</span>
+        <span class="insight-icon">✕</span>
         <div class="insight-body">
           <span class="insight-title">Razones de rechazo</span>
-          <span class="insight-meta">${rejections.map(r => escapeHtml(typeof r === 'string' ? r : `${r.reason || r.name} (${r.count || ''})`)).join(' Â· ')}</span>
+          <span class="insight-meta">${rejections.map(r => escapeHtml(typeof r === 'string' ? r : `${r.reason || r.name} (${r.count || ''})`)).join(' · ')}</span>
         </div>
       </div>
     `);
@@ -1092,7 +1265,7 @@ function renderPatternsInsight() {
     const raw = JSON.stringify(data, null, 2).slice(0, 800);
     cards.push(`
       <div class="insight-item">
-        <span class="insight-icon">â—‡</span>
+        <span class="insight-icon">◇</span>
         <div class="insight-body">
           <span class="insight-title">Datos sin procesar</span>
           <span class="insight-meta" style="white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px;">${escapeHtml(raw)}</span>
@@ -1104,9 +1277,9 @@ function renderPatternsInsight() {
   container.innerHTML = cards.join('');
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    STREAMING / TRABAJOS
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function streamJob(jobId, target) {
   const log = $(target);
@@ -1130,7 +1303,7 @@ function streamJob(jobId, target) {
   };
   source.onerror = () => {
     source.close();
-    notify('ConexiÃ³n de eventos cerrada', 'warn');
+    notify('Conexión de eventos cerrada', 'warn');
   };
 }
 
@@ -1174,9 +1347,9 @@ function resetProgressChecklist() {
   $$('#pipeline-progress li').forEach(li => { li.dataset.status = 'pending'; });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    CV / ARTIFACTS
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function setArtifactLink(selector, relPath) {
   const link = $(selector);
@@ -1216,9 +1389,9 @@ function renderKeywordCoverage(keywords = [], sourceText = '') {
   `;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    ASSISTANT (Dossier)
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function openAssistant(kind, mode = null) {
   setView('dossier');
@@ -1382,13 +1555,13 @@ function renderAssistantLog(jobId) {
   };
   source.onerror = () => {
     source.close();
-    notify('ConexiÃ³n de eventos cerrada', 'warn');
+    notify('Conexión de eventos cerrada', 'warn');
   };
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    MUTATIONS
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function fillEvaluateFromPipeline(id) {
   const item = state.pipeline.find(row => row.id === String(id));
@@ -1408,7 +1581,7 @@ async function updatePipeline(id, patch) {
 
 async function deletePipeline(id) {
   const item = state.pipeline.find(row => row.id === String(id));
-  if (!item || !confirm(`Â¿Eliminar de oportunidades?\n\n${item.company || item.url}`)) return;
+  if (!item || !confirm(`¿Eliminar de oportunidades?\n\n${item.company || item.url}`)) return;
   await api(`/api/pipeline/${id}`, { method: 'DELETE' });
   state.selected = { kind: 'pipeline', id: null };
   notify('Entrada eliminada de oportunidades');
@@ -1419,6 +1592,15 @@ async function updateStatus(number, status) {
   await api(`/api/applications/${number}/status`, { method: 'PATCH', body: { status } });
   notify('Estado actualizado');
   await loadAll();
+}
+
+async function saveApplicationOutcome(form) {
+  const number = form.dataset.outcomeForm;
+  const data = Object.fromEntries(new FormData(form));
+  await api(`/api/applications/${number}/outcome`, { method: 'POST', body: data });
+  notify('Resultado guardado en el journal');
+  await loadAll();
+  selectApplication(Number(number));
 }
 
 async function verifyPipeline(id) {
@@ -1498,16 +1680,16 @@ async function runV1Action(path, method, logSelector) {
       return;
     }
     log.textContent = JSON.stringify(result.result ?? result, null, 2);
-    notify('AcciÃ³n completada');
+    notify('Acción completada');
   } catch (err) {
     log.textContent = `[error] ${err.message}`;
     notify(err.message, 'error');
   }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    EVENT WIRING
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 function wireEvents() {
   $$('.nav-item').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
@@ -1552,22 +1734,32 @@ function wireEvents() {
     }
     if (target.dataset.learningTemplate) await openLearningTemplate(target.dataset.learningTemplate);
     if (target.dataset.loadInsights !== undefined) await loadInsights();
+    if (target.dataset.runScheduledScan !== undefined) await runScheduledScan();
+    if (target.dataset.openScanPanel !== undefined) openScanPanel();
+  });
+
+  document.addEventListener('submit', async event => {
+    if (event.target?.id === 'scan-schedule-form') await saveScannerSchedule(event);
+    if (event.target?.dataset?.outcomeForm) {
+      event.preventDefault();
+      await saveApplicationOutcome(event.target);
+    }
   });
 
   $('#refresh-btn').addEventListener('click', async () => {
     const button = $('#refresh-btn');
     button.disabled = true;
-    button.textContent = 'â€¦';
+    button.textContent = '…';
     try {
       await loadAll();
-      button.textContent = 'âœ“';
+      button.textContent = '✓';
     } catch (err) {
       button.textContent = '!';
       button.title = err.message;
     } finally {
       setTimeout(() => {
         button.disabled = false;
-        button.textContent = 'â†»';
+        button.textContent = '↻';
       }, 900);
     }
   });
@@ -1589,7 +1781,7 @@ function wireEvents() {
     const body = Object.fromEntries(new FormData(event.currentTarget));
     await api('/api/pipeline', { method: 'POST', body });
     event.currentTarget.reset();
-    notify('Oferta aÃ±adida al inbox');
+    notify('Oferta añadida al inbox');
     await loadAll();
   });
 
@@ -1610,13 +1802,13 @@ function wireEvents() {
     event.preventDefault();
     const body = Object.fromEntries(new FormData(event.currentTarget));
     if (!String(body.url || '').trim() && !String(body.jdText || '').trim()) {
-      $('#evaluate-log').textContent = '[error] Pega una descripciÃ³n o indica una URL.';
+      $('#evaluate-log').textContent = '[error] Pega una descripción o indica una URL.';
       return;
     }
     try {
       const result = await api('/api/jobs/evaluate', { method: 'POST', body });
       streamReturnedJob(result, '#evaluate-log');
-      notify(`EvaluaciÃ³n iniciada: ${result.jobId}`);
+      notify(`Evaluación iniciada: ${result.jobId}`);
     } catch (err) {
       $('#evaluate-log').textContent = `[error] ${err.message}`;
     }
@@ -1625,7 +1817,7 @@ function wireEvents() {
   $('#auto-pipeline-btn').addEventListener('click', async () => {
     const body = Object.fromEntries(new FormData($('#evaluate-form')));
     if (!String(body.url || '').trim() && !String(body.jdText || '').trim()) {
-      $('#evaluate-log').textContent = '[error] Pega una descripciÃ³n o indica una URL.';
+      $('#evaluate-log').textContent = '[error] Pega una descripción o indica una URL.';
       return;
     }
     resetProgressChecklist();
@@ -1697,7 +1889,7 @@ function wireEvents() {
     try {
       const result = await api('/api/jobs/liveness-bulk', { method: 'POST', body: { urls } });
       streamReturnedJob(result, '#batch-log');
-      notify(`VerificaciÃ³n de vigencia iniciada: ${result.jobId}`);
+      notify(`Verificación de vigencia iniciada: ${result.jobId}`);
     } catch (err) {
       $('#batch-log').textContent = `[error] ${err.message}`;
       notify(err.message, 'error');
@@ -1711,7 +1903,7 @@ function wireEvents() {
       const result = await api(`/api/modules/${kind}`, { method: 'POST', body: modulePayload(event.currentTarget) });
       if (result.jobId) {
         renderAssistantLog(result.jobId);
-        notify(`MÃ³dulo iniciado: ${result.jobId}`);
+        notify(`Módulo iniciado: ${result.jobId}`);
         return;
       }
       renderAssistantOutput(result);
@@ -1761,9 +1953,9 @@ function wireEvents() {
   });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════
    BOOT
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════ */
 
 try {
   wireEvents();

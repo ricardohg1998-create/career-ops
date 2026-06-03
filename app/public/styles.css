@@ -746,6 +746,103 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
    STATUS BADGE (new)
    ═══════════════════════════════════════════ */
 
+.scan-schedule-card {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.scan-schedule-form {
+  display: grid;
+  gap: 10px;
+}
+
+.scan-schedule-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.scan-schedule-head h3 {
+  margin: 4px 0;
+  font-size: 17px;
+}
+
+.scan-schedule-head p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.scan-schedule-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, .4fr) minmax(180px, 1fr) repeat(2, auto);
+  gap: 10px;
+  align-items: end;
+}
+
+.scan-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.scan-command-row code {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outcome-journal {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.outcome-form {
+  display: grid;
+  gap: 9px;
+}
+
+.outcome-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(150px, .7fr);
+  gap: 9px;
+}
+
+.event-list {
+  display: grid;
+  gap: 7px;
+}
+
+.event-item {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.event-item span,
+.event-item em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -1695,6 +1792,9 @@ dialog::backdrop { background: rgba(20, 18, 13, .45); }
   .scanner-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .scanner-strategy-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scanner-companies { grid-template-columns: 1fr; }
+  .scan-schedule-head, .scan-command-row { grid-template-columns: 1fr; display: grid; }
+  .scan-schedule-grid { grid-template-columns: 1fr; }
+  .outcome-grid { grid-template-columns: 1fr; }
   .discovery-meta { justify-content: flex-start; }
   .fill-plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fill-field-row { grid-template-columns: 1fr; }

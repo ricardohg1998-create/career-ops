@@ -134,7 +134,16 @@ try {
   await assertOk('/api/health', data => typeof data.ok === 'boolean');
   await assertOk('/api/dashboard', data => data.ok && data.metrics && data.priorities && data.health);
   await assertOk('/api/next-actions', data => data.ok && Array.isArray(data.actions));
-  await assertOk('/api/applications', data => Array.isArray(data.applications) && data.metrics);
+  const appPayload = await assertOk('/api/applications', data => Array.isArray(data.applications) && data.metrics);
+  if (appPayload.applications.length) {
+    await assertPost(`/api/applications/${appPayload.applications[0].number}/outcome`, {
+      status: appPayload.applications[0].status,
+      outcome: 'note',
+      notes: 'Smoke dry run',
+      finalAnswers: 'No real submission.',
+      dryRun: true,
+    }, data => data.ok && data.dryRun && data.path === 'data/application-events.md');
+  }
   await assertOk('/api/pipeline', data => Array.isArray(data.entries));
   await assertOk('/api/reports', data => Array.isArray(data.reports));
   await assertOk('/api/jobs', data => Array.isArray(data.jobs));
@@ -217,6 +226,8 @@ try {
   const strategy = await assertOk('/api/scanner/strategy', data => data.ok && data.titleFilter && data.summary && Array.isArray(data.companies));
   assert(Array.isArray(strategy.titleFilter.positive), 'scanner strategy needs positive title keywords');
   assert('enabledCompanies' in strategy.summary, 'scanner strategy summary is missing enabled company count');
+  const schedule = await assertOk('/api/scanner/schedule', data => data.ok && typeof data.enabled === 'boolean' && data.command);
+  assert(Number.isFinite(schedule.frequencyDays), 'scanner schedule needs a numeric frequency');
   await assertPost('/api/jobs/batch', { dryRun: true, tsv: 'https://example.com/jobs/1\tExample\tRole' }, data => data.ok && data.dryRun && data.rows.length === 1);
   await assertOk('/api/followups', data => 'ok' in data);
   await assertOk('/api/patterns', data => 'ok' in data);

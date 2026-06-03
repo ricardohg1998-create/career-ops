@@ -42,12 +42,12 @@ Implemented in the local web app:
 - Guided learning proposals capture corrections such as score-too-high, would-not-apply, missed experience, and voice mismatch before writing to user-layer files.
 - Opportunities includes a visual discovery panel backed by scan history, with pending/evaluated/closed state, source confidence, and direct actions to evaluate or reimport discovered offers.
 - Profile includes a scanner strategy editor for target keywords, blocked keywords, location filters, and enabled companies in `portals.yml`.
+- Automatic offer discovery now has a visual inbox layer, editable scanner strategy, and a local recurring discovery routine that can surface due scans in the North Star.
+- Post-apply decisions can be captured from the application detail panel and saved to `data/application-events.md`.
 
 Still open:
 
-- Automatic offer discovery now has a visual inbox layer and editable scanner strategy, but recurring scheduling still needs to be exposed in the interface.
 - Guided browser filling needs a visible, user-supervised field-by-field flow.
-- The UI should persist final application answers and user-confirmed outcomes after submission.
 - The profile view should expose recent learning and writing-style calibration more clearly.
 
 ## Offer Management And Assisted Applying
@@ -127,6 +127,7 @@ For each evaluated opportunity, the interface should expose an application conso
    - If the user confirms submission, update the tracker to `Applied`.
    - Save final answers or notes.
    - Suggest outreach or follow-up cadence.
+   - Keep an auditable event in `data/application-events.md`. `[implemented]`
 
 ## UX Principles
 
@@ -254,7 +255,7 @@ Every opportunity should resolve to one of these product recommendations:
   - CV generated.
   - Cover letter or answers drafted when relevant.
   - Human review pending.
-- Add an application console for the selected opportunity. `[implemented for applications/reports]`
+- Add an application console for the selected opportunity. `[implemented for opportunities/applications/reports]`
 - Support form URL inspection and question extraction. `[implemented with offer-URL apply-link discovery]`
 - Let the user launch Draft Only, Form Reader, Guided Browser, or Subagent Prep.
 - Stop all assisted flows before final submit/send/apply.
@@ -263,7 +264,7 @@ Every opportunity should resolve to one of these product recommendations:
 
 - Expand portal scanner coverage and make scan results visible as fresh inbox items. `[partly implemented]`
 - Add source confidence, dedupe reason, and live/closed signal per imported role. `[partly implemented]`
-- Add a scheduled scan path for recurring discovery.
+- Add a scheduled scan path for recurring discovery. `[implemented as a local UI routine; external cron/assistant automation remains optional]`
 - Let the user approve target keywords and company lists from the visual Profile/System area. `[implemented in Profile]`
 
 ### Phase 5: Strategy Insights

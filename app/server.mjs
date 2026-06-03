@@ -57,7 +57,9 @@ const userFiles = {
   articleDigest: path.join(ROOT, 'article-digest.md'),
   pipeline: path.join(ROOT, 'data', 'pipeline.md'),
   scanHistory: path.join(ROOT, 'data', 'scan-history.tsv'),
+  scanSchedule: path.join(ROOT, 'data', 'scan-schedule.json'),
   applications: path.join(ROOT, 'data', 'applications.md'),
+  applicationEvents: path.join(ROOT, 'data', 'application-events.md'),
   portals: path.join(ROOT, 'portals.yml'),
   states: path.join(ROOT, 'templates', 'states.yml'),
   version: path.join(ROOT, 'VERSION'),
@@ -166,7 +168,7 @@ function parseJsonBody(req) {
     req.on('data', chunk => {
       raw += chunk;
       if (raw.length > MAX_BODY) {
-        reject(Object.assign(new Error('El cuerpo de la peticiÃ³n es demasiado grande'), { status: 413 }));
+        reject(Object.assign(new Error('El cuerpo de la petición es demasiado grande'), { status: 413 }));
         req.destroy();
       }
     });
@@ -175,7 +177,7 @@ function parseJsonBody(req) {
       try {
         resolve(JSON.parse(raw));
       } catch {
-        reject(Object.assign(new Error('JSON invÃ¡lido'), { status: 400 }));
+        reject(Object.assign(new Error('JSON inválido'), { status: 400 }));
       }
     });
     req.on('error', reject);
@@ -210,7 +212,7 @@ function parseApplications() {
       scoreRaw: cells[4] || '',
       score: scoreMatch ? Number(scoreMatch[1]) : null,
       status: cells[5] || '',
-      hasPdf: /âœ…|Ã¢Å“â€¦/.test(cells[6] || ''),
+      hasPdf: String(cells[6] || '').includes('✅') || String(cells[6] || '').includes('✓'),
       report: cells[7] || '',
       reportPath,
       pdfPath,
@@ -249,7 +251,7 @@ function parseReportMeta(reportPath) {
   const text = readText(safe);
   const head = text.slice(0, 5000);
   const title = head.match(/^#\s+(.+)$/m)?.[1]?.trim() || reportIdFromPath(reportPath);
-  const companyRole = title.match(/^Evaluation:\s*(.+?)\s+[â€”-]\s+(.+)$/i);
+  const companyRole = title.match(/^Evaluation:\s*(.+?)\s+[—-]\s+(.+)$/i);
   const scoreRaw = head.match(/^\*\*Score:\*\*\s*(.+)$/m)?.[1]?.trim() || '';
   const score = scoreRaw.match(/(\d+(?:\.\d+)?)\/5/)?.[1];
   return {
@@ -354,13 +356,20 @@ function daysSince(dateValue) {
   return Math.floor((Date.now() - parsed.getTime()) / 86400000);
 }
 
+function addDays(dateValue, days) {
+  const parsed = new Date(`${String(dateValue || '').trim()}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return '';
+  parsed.setDate(parsed.getDate() + Number(days || 0));
+  return parsed.toISOString().slice(0, 10);
+}
+
 function actionPriorityRank(action) {
   const priority = { critical: 0, high: 1, medium: 2, low: 3 };
   const urgency = { now: 0, soon: 1, later: 2 };
   return (priority[action.priority] ?? 9) * 10 + (urgency[action.urgency] ?? 9);
 }
 
-function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline().entries, checks = healthChecks() } = {}) {
+function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline().entries, checks = healthChecks(), schedule = scannerScheduleConfig() } = {}) {
   const actions = [];
   const push = action => actions.push({
     urgency: 'soon',
@@ -432,6 +441,25 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
       targetView: 'tracker',
       selectKind: 'app',
       selectId: app.number,
+    });
+  }
+
+  if (schedule.enabled && schedule.due) {
+    push({
+      id: 'scheduled-scan-due',
+      type: 'scan',
+      recommendation: 'Discover',
+      priority: 'medium',
+      urgency: 'now',
+      headline: 'Escanear nuevas oportunidades',
+      label: `Rutina de discovery cada ${schedule.frequencyDays} dias`,
+      reason: schedule.lastScanDate
+        ? `Ultimo scan: ${schedule.lastScanDate}. La rutina vence hoy o ya esta vencida.`
+        : 'La rutina esta activa y aun no hay scan registrado.',
+      primaryAction: 'Abrir escaner',
+      targetView: 'opportunities',
+      openScanPanel: true,
+      safety: 'Importa oportunidades a la cola; no aplica ni envia nada.',
     });
   }
 
@@ -524,6 +552,7 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
       reason: 'El pipeline esta limpio. Buen momento para descubrir ofertas nuevas o revisar patrones.',
       primaryAction: 'Escanear portales',
       targetView: 'opportunities',
+      openScanPanel: true,
     });
   }
 
@@ -566,9 +595,84 @@ function updateApplicationStatus(num, status) {
     updated = true;
     return `| ${cells.join(' | ')} |`;
   });
-  if (!updated) throw Object.assign(new Error(`AplicaciÃ³n #${target} no encontrada`), { status: 404 });
+  if (!updated) throw Object.assign(new Error(`Aplicación #${target} no encontrada`), { status: 404 });
   writeFileSync(userFiles.applications, next.join('\n'), 'utf-8');
   return state;
+}
+
+function ensureApplicationEventsFile() {
+  ensureUserDirs();
+  if (!existsSync(userFiles.applicationEvents)) {
+    writeFileSync(userFiles.applicationEvents, [
+      '# Application Decision Journal',
+      '',
+      'Human-confirmed outcomes, final answers, follow-up notes, and post-apply decisions captured from the visual interface.',
+      '',
+    ].join('\n'), 'utf-8');
+  }
+}
+
+function appendApplicationOutcome(num, body = {}) {
+  const target = Number.parseInt(num, 10);
+  const app = parseApplications().find(row => row.number === target);
+  if (!app) throw Object.assign(new Error(`Aplicación #${target} no encontrada`), { status: 404 });
+  const dryRun = Boolean(body.dryRun);
+  const state = body.status && !dryRun ? updateApplicationStatus(target, body.status) : normalizeStatus(body.status || app.status);
+  const outcome = String(body.outcome || state.label || 'decision').trim();
+  const notes = String(body.notes || '').trim();
+  const finalAnswers = String(body.finalAnswers || '').trim();
+  const nextAction = String(body.nextAction || '').trim();
+  const followUpDate = String(body.followUpDate || '').trim();
+  const today = new Date().toISOString().slice(0, 10);
+  const block = [
+    `## ${today} - #${target} ${app.company} - ${app.role}`,
+    '',
+    `- Status: ${state.label}`,
+    `- Outcome: ${outcome || 'n/a'}`,
+    followUpDate ? `- Follow-up date: ${followUpDate}` : '',
+    nextAction ? `- Next action: ${nextAction}` : '',
+    notes ? `- Notes: ${notes.replace(/\r?\n/g, ' ')}` : '',
+    finalAnswers ? ['', '### Final answers / submitted notes', '', finalAnswers] : '',
+    '',
+  ].flat().filter(line => line !== '').join('\n');
+  if (!dryRun) {
+    ensureApplicationEventsFile();
+    const existing = readText(userFiles.applicationEvents);
+    writeFileSync(userFiles.applicationEvents, `${existing.replace(/\s*$/, '\n\n')}${block}\n`, 'utf-8');
+  }
+  return {
+    ok: true,
+    dryRun,
+    application: target,
+    status: state.label,
+    event: { date: today, outcome, notes, finalAnswers, nextAction, followUpDate },
+    path: 'data/application-events.md',
+  };
+}
+
+function parseApplicationEvents() {
+  const content = readText(userFiles.applicationEvents);
+  const events = [];
+  let current = null;
+  for (const line of content.split(/\r?\n/)) {
+    const heading = line.match(/^##\s+(\d{4}-\d{2}-\d{2})\s+-\s+#(\d+)\s+(.+)$/);
+    if (heading) {
+      current = { date: heading[1], application: Number(heading[2]), title: heading[3], status: '', outcome: '', nextAction: '', followUpDate: '', notes: '' };
+      events.push(current);
+      continue;
+    }
+    if (!current) continue;
+    const field = line.match(/^-\s+([^:]+):\s*(.*)$/);
+    if (!field) continue;
+    const key = field[1].toLowerCase();
+    const value = field[2] || '';
+    if (key === 'status') current.status = value;
+    if (key === 'outcome') current.outcome = value;
+    if (key === 'next action') current.nextAction = value;
+    if (key === 'follow-up date') current.followUpDate = value;
+    if (key === 'notes') current.notes = value;
+  }
+  return events.reverse();
 }
 
 function parsePipeline() {
@@ -667,6 +771,60 @@ function parseScanHistory() {
     });
   }
   return rows;
+}
+
+function latestScanDate() {
+  const dates = parseScanHistory()
+    .map(row => row.firstSeen)
+    .filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value))
+    .sort();
+  return dates.at(-1) || '';
+}
+
+function scannerScheduleConfig() {
+  let saved = {};
+  try {
+    saved = JSON.parse(readText(userFiles.scanSchedule, '{}').replace(/^\uFEFF/, '')) || {};
+  } catch {}
+  const frequencyDays = Math.min(30, Math.max(1, Number.parseInt(saved.frequencyDays, 10) || 3));
+  const lastScanDate = latestScanDate();
+  const nextScanDate = lastScanDate ? addDays(lastScanDate, frequencyDays) : '';
+  const daysUntilNext = nextScanDate ? -daysSince(nextScanDate) : null;
+  const due = Boolean(saved.enabled) && (!nextScanDate || (daysUntilNext !== null && daysUntilNext <= 0));
+  return {
+    ok: true,
+    enabled: Boolean(saved.enabled),
+    frequencyDays,
+    dryRun: saved.dryRun !== false,
+    verify: Boolean(saved.verify),
+    company: String(saved.company || ''),
+    lastScanDate,
+    nextScanDate,
+    daysUntilNext,
+    due,
+    command: [
+      'node scan.mjs',
+      saved.dryRun !== false ? '--dry-run' : '',
+      saved.verify ? '--verify' : '',
+      saved.company ? `--company "${String(saved.company).replace(/"/g, '\\"')}"` : '',
+    ].filter(Boolean).join(' '),
+    savedAt: saved.savedAt || '',
+  };
+}
+
+function saveScannerSchedule(body = {}) {
+  ensureUserDirs();
+  const frequencyDays = Math.min(30, Math.max(1, Number.parseInt(body.frequencyDays, 10) || 3));
+  const payload = {
+    enabled: Boolean(body.enabled),
+    frequencyDays,
+    dryRun: body.dryRun !== false,
+    verify: Boolean(body.verify),
+    company: String(body.company || '').trim(),
+    savedAt: new Date().toISOString(),
+  };
+  writeFileSync(userFiles.scanSchedule, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
+  return scannerScheduleConfig();
 }
 
 function buildScannerDiscovery({ limit = 80 } = {}) {
@@ -1389,8 +1547,8 @@ async function handleApi(req, res, url) {
       metrics,
       priorities: {
         topApps: topApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'Lista para decidir' })),
-        lowApps: lowApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'PuntuaciÃ³n baja: recomienda descartar' })),
-        pendingPipeline: pendingPipeline.map(p => ({ id: p.id, url: p.url, company: p.company, role: p.role, sourceHost: p.sourceHost, action: 'Pendiente de evaluaciÃ³n' })),
+        lowApps: lowApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'Puntuación baja: recomienda descartar' })),
+        pendingPipeline: pendingPipeline.map(p => ({ id: p.id, url: p.url, company: p.company, role: p.role, sourceHost: p.sourceHost, action: 'Pendiente de evaluación' })),
       },
       health: { ok: Object.values(checks).every(Boolean), checks },
       version: readText(userFiles.version, 'unknown').trim(),
@@ -1498,6 +1656,7 @@ async function handleApi(req, res, url) {
       applications,
       metrics: computeMetrics(applications),
       states: loadStates().states.map(s => ({ id: s.id, label: s.label, description: s.description })),
+      events: parseApplicationEvents().slice(0, 25),
     });
   }
 
@@ -1517,6 +1676,16 @@ async function handleApi(req, res, url) {
     const body = await parseJsonBody(req);
     const state = updateApplicationStatus(statusMatch[1], body.status);
     return json(res, 200, { ok: true, state });
+  }
+
+  const outcomeMatch = url.pathname.match(/^\/api\/applications\/(\d+)\/outcome$/);
+  if (req.method === 'POST' && outcomeMatch) {
+    const body = await parseJsonBody(req);
+    return json(res, 200, appendApplicationOutcome(outcomeMatch[1], body));
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/application-events') {
+    return json(res, 200, { ok: true, events: parseApplicationEvents() });
   }
 
   if (url.pathname === '/api/pipeline') {
@@ -1615,6 +1784,15 @@ async function handleApi(req, res, url) {
     return json(res, 200, updateScannerStrategy(body));
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/scanner/schedule') {
+    return json(res, 200, scannerScheduleConfig());
+  }
+
+  if (req.method === 'PUT' && url.pathname === '/api/scanner/schedule') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, saveScannerSchedule(body));
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/jobs/batch') {
     const body = await parseJsonBody(req);
     const rows = String(body.tsv || body.urls || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(0, 100);
@@ -1674,7 +1852,7 @@ async function handleApi(req, res, url) {
     const body = await parseJsonBody(req);
     let jdText = String(body.jdText || '').trim();
     const sourceUrl = String(body.url || '').trim();
-    if (!jdText && !sourceUrl) return json(res, 400, { error: 'Pega una descripciÃ³n o indica una URL.' });
+    if (!jdText && !sourceUrl) return json(res, 400, { error: 'Pega una descripción o indica una URL.' });
     if (!jdText && sourceUrl) jdText = await extractJobText(sourceUrl);
     mkdirSync(path.join(ROOT, 'jds'), { recursive: true });
     const name = `${new Date().toISOString().slice(0, 10)}-${slugify(body.title || sourceUrl)}-${Date.now()}.txt`;
@@ -1750,10 +1928,10 @@ async function handleApi(req, res, url) {
         }
       } else {
         setStep(push, steps, 'url-guard', 'completed', { url: null });
-        setStep(push, steps, 'liveness', 'partial', { reason: 'No se indicÃ³ URL' });
+        setStep(push, steps, 'liveness', 'partial', { reason: 'No se indicó URL' });
         setStep(push, steps, 'jd-extraction', jdText ? 'completed' : 'failed', { trust: extractionTrust });
       }
-      if (!jdText) throw new Error('Pega una descripciÃ³n o indica una URL.');
+      if (!jdText) throw new Error('Pega una descripción o indica una URL.');
       mkdirSync(path.join(ROOT, 'jds'), { recursive: true });
       const name = `${new Date().toISOString().slice(0, 10)}-${slugify(body.title || sourceUrl || 'job')}-${Date.now()}.txt`;
       const rel = `jds/${name}`;
@@ -1770,14 +1948,14 @@ async function handleApi(req, res, url) {
       if (evaluation.stderr) push('warning', evaluation.stderr);
       if (!evaluation.ok) {
         setStep(push, steps, 'evaluation', 'failed');
-        throw new Error(evaluation.error || 'La evaluaciÃ³n ha fallado');
+        throw new Error(evaluation.error || 'La evaluación ha fallado');
       }
       setStep(push, steps, 'evaluation', body.mock ? 'partial' : 'completed', { trust: body.mock ? 'untrusted-mock' : extractionTrust });
 
       setStep(push, steps, 'tracker-merge', 'running');
       const merge = await commandText(process.execPath, ['merge-tracker.mjs']);
       if (merge.stdout) push('progress', merge.stdout);
-      if (!merge.ok) throw new Error(merge.error || 'La integraciÃ³n del tracker ha fallado');
+      if (!merge.ok) throw new Error(merge.error || 'La integración del tracker ha fallado');
       setStep(push, steps, 'tracker-merge', 'completed');
 
       const report = latestReportAfter(before);
@@ -1821,7 +1999,7 @@ async function handleApi(req, res, url) {
           setStep(push, steps, 'apply-draft', 'completed', { path: applyPath });
           push('artifact', JSON.stringify({ step: 'draft-answers', path: applyPath, draft: applyDraft.markdown }));
         } else {
-          setStep(push, steps, 'apply-draft', 'partial', { reason: 'PuntuaciÃ³n por debajo de 4.5' });
+          setStep(push, steps, 'apply-draft', 'partial', { reason: 'Puntuación por debajo de 4.5' });
         }
         push('artifact', JSON.stringify({ step: 'completed', report: report.path, reportPdf: reportPdfRel, cvPdf: pdfRel, steps }));
       } else {
@@ -1836,7 +2014,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/jobs/report-pdf') {
     const body = await parseJsonBody(req);
     const input = resolveAllowedPath(String(body.reportPath || ''), ['reports']);
-    if (!input || !existsSync(input)) return json(res, 400, { error: 'Hace falta una ruta vÃ¡lida dentro de reports/*.' });
+    if (!input || !existsSync(input)) return json(res, 400, { error: 'Hace falta una ruta válida dentro de reports/*.' });
     mkdirSync(path.join(ROOT, 'output'), { recursive: true });
     const outRel = `output/${path.basename(input, '.md')}.pdf`;
     const job = createJob('report-pdf', process.execPath, ['generate-report-pdf.mjs', path.relative(ROOT, input), outRel]);
@@ -1999,7 +2177,7 @@ function runScriptJson(args) {
       try {
         resolve({ ok: code === 0, data: JSON.parse(stdout), stderr });
       } catch {
-        resolve({ ok: false, data: null, stdout, stderr, error: 'El script no devolviÃ³ JSON' });
+        resolve({ ok: false, data: null, stdout, stderr, error: 'El script no devolvió JSON' });
       }
     });
   });

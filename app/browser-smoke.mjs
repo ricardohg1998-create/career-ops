@@ -73,6 +73,12 @@ try {
   const discoveryText = await page.locator('#scanner-discovery').innerText();
   assert(discoveryText.includes('Ofertas descubiertas automaticamente'), 'scanner discovery panel is missing');
   console.log('ok browser scanner discovery panel');
+  await page.locator('#scan-open-btn').click();
+  await page.locator('#scan-schedule-card').waitFor();
+  const scheduleText = await page.locator('#scan-schedule-card').innerText();
+  assert(scheduleText.includes('Rutina de escaneo'), 'scanner schedule card is missing');
+  assert(await page.locator('#scan-schedule-form input[name="frequencyDays"]').count() === 1, 'scanner schedule frequency control is missing');
+  console.log('ok browser scanner schedule panel');
   await page.locator('[data-view="profile"]').click();
   await page.locator('#scanner-strategy-form').waitFor();
   const strategyText = await page.locator('#scanner-strategy-form').innerText();
@@ -117,6 +123,12 @@ try {
   await page.locator('.app-shell').waitFor();
   await page.locator('[data-view="tracker"]').click();
   await page.locator('#applications-table').waitFor();
+  if (await page.locator('.outcome-journal').count()) {
+    const outcomeText = await page.locator('.outcome-journal').first().innerText();
+    assert(outcomeText.includes('Registrar decision') || outcomeText.includes('Registrar'), 'post-apply outcome journal is missing');
+    assert(await page.locator('.outcome-journal textarea[name="finalAnswers"]').count() >= 1, 'final answers capture is missing');
+    console.log('ok browser outcome journal panel');
+  }
   const overflow = await page.evaluate(() => {
     const doc = document.documentElement;
     return doc.scrollWidth > doc.clientWidth + 2;

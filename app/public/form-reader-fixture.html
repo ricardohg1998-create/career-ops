@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Application Form Fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>Apply for Growth Lead</h1>
+      <form>
+        <label for="full-name">Full name</label>
+        <input id="full-name" name="fullName" required>
+
+        <label for="motivation">Why this role?</label>
+        <textarea id="motivation" name="motivation" required></textarea>
+
+        <label for="salary">Salary expectations</label>
+        <input id="salary" name="salary" placeholder="EUR range">
+
+        <label for="work-auth">Work authorization</label>
+        <select id="work-auth" name="workAuthorization" required>
+          <option value="">Select</option>
+          <option>EU citizen</option>
+          <option>Needs sponsorship</option>
+        </select>
+
+        <button type="submit">Submit application</button>
+      </form>
+    </main>
+  </body>
+</html>

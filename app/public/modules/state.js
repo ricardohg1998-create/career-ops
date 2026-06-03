@@ -7,6 +7,10 @@ export const state = {
   pipeline: [],
   reports: [],
   jobs: [],
+  nextActions: [],
+  lastModuleResult: null,
+  scanner: null,
+  scannerStrategy: null,
   followups: null,
   patterns: null,
   selected: { kind: 'home', id: null },
@@ -49,6 +53,7 @@ export const presetLabels = {
 
 export const moduleLabels = {
   'apply-assistant': 'Asistente de candidatura',
+  'form-reader': 'Lector de formulario',
   'deep-research': 'Investigación profunda',
   'interview-prep': 'Preparación de entrevista',
   'outreach': 'Contacto LinkedIn',

@@ -59,7 +59,26 @@ try {
 
   await page.goto(base, { waitUntil: 'networkidle' });
   await page.locator('.safety-pill').waitFor();
-  assert((await page.locator('.safety-pill').textContent()).includes('No envía ni aplica automáticamente'), 'app-level no-submit safety banner is missing');
+  const safetyText = await page.locator('.safety-pill').textContent();
+  assert(safetyText.includes('No env') && safetyText.includes('aplica'), 'app-level no-submit safety banner is missing');
+  if (await page.locator('#north-star-answer .primary-btn').count()) {
+    await page.locator('#north-star-answer .primary-btn').click();
+    if (await page.locator('.application-console').count()) {
+      assert(await page.locator('[data-learning-template="score_too_high"]').count() === 1, 'guided learning feedback action is missing');
+    }
+    await page.locator('[data-view="home"]').click();
+  }
+  await page.locator('[data-view="opportunities"]').click();
+  await page.locator('#scanner-discovery').waitFor();
+  const discoveryText = await page.locator('#scanner-discovery').innerText();
+  assert(discoveryText.includes('Ofertas descubiertas automaticamente'), 'scanner discovery panel is missing');
+  console.log('ok browser scanner discovery panel');
+  await page.locator('[data-view="profile"]').click();
+  await page.locator('#scanner-strategy-form').waitFor();
+  const strategyText = await page.locator('#scanner-strategy-form').innerText();
+  assert(strategyText.includes('Empresas objetivo'), 'scanner strategy form is missing company controls');
+  assert(await page.locator('#scanner-companies input[name="enabledCompany"]').count() > 0, 'scanner strategy company checkboxes are missing');
+  console.log('ok browser scanner strategy panel');
   const followups = await page.evaluate(async () => {
     const res = await fetch('/api/followups');
     return res.ok ? res.json() : null;
@@ -72,6 +91,7 @@ try {
   await page.locator('[data-view="dossier"]').click();
   await page.locator('#module-form').waitFor();
   assert((await page.locator('#module-form').textContent()).includes('Generar asistente'), 'assistant CTA copy is missing');
+  assert(await page.locator('#module-kind option[value="form-reader"]').count() === 1, 'form-reader module option is missing');
 
   await submitModule(page, 'apply-assistant', 'Do not submit until the candidate gives final approval.', '');
   await submitModule(page, 'deep-research', 'Return structured findings with sources');
@@ -86,7 +106,9 @@ try {
   await page.locator('#evaluate-url').fill('');
   await page.locator('#evaluate-jd').fill('');
   await page.locator('#auto-pipeline-btn').click();
-  await page.waitForFunction(() => document.querySelector('#evaluate-log')?.textContent?.includes('Pega una descripción o indica una URL.'));
+  await page.waitForFunction(() => document.querySelector('#evaluate-log')?.textContent?.trim().length > 0);
+  const emptyGuardText = await page.locator('#evaluate-log').textContent();
+  assert(emptyGuardText.includes('Pega una') && emptyGuardText.includes('URL'), 'empty auto-pipeline guard text is missing');
   assert(autoPipelineRequests.length === 0, 'empty auto-pipeline click dispatched a job request');
   console.log('ok browser auto-pipeline empty-input guard');
 

@@ -55,6 +55,7 @@
 
             <!-- ═══ HOME ═══ -->
             <section id="view-home" class="view active">
+              <section id="north-star-answer" class="north-star-answer" aria-live="polite"></section>
               <div class="metric-grid" id="metrics"></div>
               <div class="band">
                 <div class="panel-head">
@@ -98,6 +99,7 @@
                 <input id="pipeline-role" name="role" placeholder="Rol" autocomplete="organization-title">
                 <button class="primary-btn">Añadir</button>
               </form>
+              <section id="scanner-discovery" class="scanner-discovery" aria-live="polite"></section>
               <div id="pipeline-list" class="inbox-list"></div>
               <section id="scan-panel" class="panel hidden">
                 <div class="panel-head"><h2>Escáner de portales</h2><span class="muted">Escribe en la cola salvo simulación.</span></div>
@@ -217,6 +219,7 @@
                     <label class="sr-only" for="module-kind">Asistente</label>
                     <select id="module-kind" name="kind" aria-label="Asistente de candidatura">
                       <option value="apply-assistant">Asistente de candidatura</option>
+                      <option value="form-reader">Lector de formulario</option>
                       <option value="deep-research">Investigación profunda</option>
                       <option value="interview-prep">Preparación de entrevista</option>
                       <option value="outreach">Contacto LinkedIn</option>
@@ -234,11 +237,12 @@
                   <div class="form-grid">
                     <input name="role" placeholder="Rol">
                     <input name="url" type="url" placeholder="URL de la oferta" autocomplete="url">
-                    <input name="formUrl" type="url" placeholder="URL del formulario (solo asistencia, no envía)" autocomplete="url">
+                    <input name="formUrl" type="url" placeholder="URL del formulario opcional; si falta se busca desde la oferta" autocomplete="url">
                   </div>
                   <input name="contactUrl" type="url" placeholder="URL LinkedIn/contacto (no envía nada)" autocomplete="url">
                   <textarea name="notes" rows="5" placeholder="Preguntas, contexto adicional o IDs de reports separados por coma"></textarea>
                   <p class="guardrail-copy">Career-Ops solo genera borradores y asiste. Tú revisas antes de enviar o aplicar.</p>
+                  <p class="guardrail-copy">Las respuestas usan tu estilo personal calibrado en <code>modes/_profile.md</code>.</p>
                   <button class="primary-btn">Generar asistente</button>
                 </form>
                 <div id="module-output" class="assistant-output" aria-live="polite"></div>
@@ -272,6 +276,29 @@
                 <button class="tab" data-profile-tab="articleDigest">article-digest.md</button>
               </div>
               <section id="profile-insights" class="lab-pane active">
+                <section class="panel">
+                  <div class="panel-head"><h2>Estrategia de escaneo</h2><span class="muted">Edita <code>portals.yml</code> sin tocar YAML</span></div>
+                  <form id="scanner-strategy-form" class="scanner-strategy-form">
+                    <div class="scanner-strategy-summary" id="scanner-strategy-summary"></div>
+                    <div class="form-grid">
+                      <label class="field-label">Keywords objetivo<textarea name="positive" rows="8" spellcheck="false"></textarea></label>
+                      <label class="field-label">Keywords a bloquear<textarea name="negative" rows="8" spellcheck="false"></textarea></label>
+                    </div>
+                    <div class="form-grid">
+                      <label class="field-label">Ubicaciones permitidas<textarea name="allowLocations" rows="5" spellcheck="false"></textarea></label>
+                      <label class="field-label">Ubicaciones bloqueadas<textarea name="blockLocations" rows="5" spellcheck="false"></textarea></label>
+                    </div>
+                    <div class="scanner-companies-head">
+                      <strong>Empresas objetivo</strong>
+                      <span class="muted">Activa solo las que merecen aparecer en discovery.</span>
+                    </div>
+                    <div id="scanner-companies" class="scanner-companies"></div>
+                    <div class="toolbar">
+                      <button class="primary-btn">Guardar estrategia</button>
+                      <button class="ghost-btn" type="button" id="reload-scanner-strategy">Recargar</button>
+                    </div>
+                  </form>
+                </section>
                 <div class="two-col">
                   <section class="panel">
                     <div class="panel-head"><h2>Seguimientos</h2><button id="load-followups" class="ghost-btn">Recargar</button></div>

@@ -13,6 +13,7 @@ import {
   buildModuleArtifactPath,
   runApplyAssistant,
   runDeepResearch,
+  runFormReader,
   runInterviewPrep,
   runOutreach,
   writeUserArtifact,
@@ -55,6 +56,7 @@ const userFiles = {
   profileMode: path.join(ROOT, 'modes', '_profile.md'),
   articleDigest: path.join(ROOT, 'article-digest.md'),
   pipeline: path.join(ROOT, 'data', 'pipeline.md'),
+  scanHistory: path.join(ROOT, 'data', 'scan-history.tsv'),
   applications: path.join(ROOT, 'data', 'applications.md'),
   portals: path.join(ROOT, 'portals.yml'),
   states: path.join(ROOT, 'templates', 'states.yml'),
@@ -164,7 +166,7 @@ function parseJsonBody(req) {
     req.on('data', chunk => {
       raw += chunk;
       if (raw.length > MAX_BODY) {
-        reject(Object.assign(new Error('El cuerpo de la petición es demasiado grande'), { status: 413 }));
+        reject(Object.assign(new Error('El cuerpo de la peticiÃ³n es demasiado grande'), { status: 413 }));
         req.destroy();
       }
     });
@@ -173,7 +175,7 @@ function parseJsonBody(req) {
       try {
         resolve(JSON.parse(raw));
       } catch {
-        reject(Object.assign(new Error('JSON inválido'), { status: 400 }));
+        reject(Object.assign(new Error('JSON invÃ¡lido'), { status: 400 }));
       }
     });
     req.on('error', reject);
@@ -208,7 +210,7 @@ function parseApplications() {
       scoreRaw: cells[4] || '',
       score: scoreMatch ? Number(scoreMatch[1]) : null,
       status: cells[5] || '',
-      hasPdf: /✅|âœ…/.test(cells[6] || ''),
+      hasPdf: /âœ…|Ã¢Å“â€¦/.test(cells[6] || ''),
       report: cells[7] || '',
       reportPath,
       pdfPath,
@@ -247,7 +249,7 @@ function parseReportMeta(reportPath) {
   const text = readText(safe);
   const head = text.slice(0, 5000);
   const title = head.match(/^#\s+(.+)$/m)?.[1]?.trim() || reportIdFromPath(reportPath);
-  const companyRole = title.match(/^Evaluation:\s*(.+?)\s+[—-]\s+(.+)$/i);
+  const companyRole = title.match(/^Evaluation:\s*(.+?)\s+[â€”-]\s+(.+)$/i);
   const scoreRaw = head.match(/^\*\*Score:\*\*\s*(.+)$/m)?.[1]?.trim() || '';
   const score = scoreRaw.match(/(\d+(?:\.\d+)?)\/5/)?.[1];
   return {
@@ -346,6 +348,188 @@ function computeMetrics(apps) {
   };
 }
 
+function daysSince(dateValue) {
+  const parsed = new Date(`${String(dateValue || '').trim()}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return Math.floor((Date.now() - parsed.getTime()) / 86400000);
+}
+
+function actionPriorityRank(action) {
+  const priority = { critical: 0, high: 1, medium: 2, low: 3 };
+  const urgency = { now: 0, soon: 1, later: 2 };
+  return (priority[action.priority] ?? 9) * 10 + (urgency[action.urgency] ?? 9);
+}
+
+function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline().entries, checks = healthChecks() } = {}) {
+  const actions = [];
+  const push = action => actions.push({
+    urgency: 'soon',
+    safety: 'Revision humana antes de enviar o aplicar.',
+    ...action,
+  });
+
+  const runningJobs = [...jobs.values()].filter(job => job.status === 'running');
+  if (runningJobs.length) {
+    push({
+      id: 'jobs-running',
+      type: 'monitor',
+      recommendation: 'Review',
+      priority: 'critical',
+      urgency: 'now',
+      headline: `Supervisar ${runningJobs.length} trabajo${runningJobs.length === 1 ? '' : 's'} en curso`,
+      label: `${runningJobs.length} trabajo${runningJobs.length === 1 ? '' : 's'} en curso`,
+      reason: 'Hay procesos generando artefactos o evaluaciones; conviene revisar el resultado antes de abrir otro flujo.',
+      primaryAction: 'Ver progreso',
+      targetView: 'evaluate',
+    });
+  }
+
+  const highFit = apps
+    .filter(app => app.status === 'Evaluated' && typeof app.score === 'number' && app.score >= 4)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  for (const app of highFit.slice(0, 4)) {
+    const hasArtifacts = Boolean(app.reportPath || app.pdfPath);
+    push({
+      id: `app-${app.number}-apply`,
+      type: hasArtifacts ? 'apply-assisted' : 'decide',
+      recommendation: hasArtifacts ? 'Apply Assisted' : 'Apply',
+      priority: 'high',
+      urgency: app.score >= 4.4 ? 'now' : 'soon',
+      company: app.company,
+      role: app.role,
+      number: app.number,
+      score: app.scoreRaw,
+      headline: hasArtifacts ? `Preparar candidatura asistida para ${app.company}` : `Decidir candidatura para ${app.company}`,
+      label: `${app.company} - ${app.role} (${app.scoreRaw || 'sin score'})`,
+      reason: 'Score alto y estado Evaluated. Siguiente paso: revisar ajuste, generar CV/dossier y decidir si aplicar.',
+      primaryAction: hasArtifacts ? 'Abrir aplicacion asistida' : 'Revisar decision',
+      targetView: 'tracker',
+      selectKind: 'app',
+      selectId: app.number,
+    });
+  }
+
+  const activeStale = apps
+    .filter(app => ['Applied', 'Responded', 'Interview'].includes(app.status))
+    .map(app => ({ ...app, ageDays: daysSince(app.date) }))
+    .filter(app => app.ageDays !== null && app.ageDays >= 7)
+    .sort((a, b) => b.ageDays - a.ageDays);
+  for (const app of activeStale.slice(0, 3)) {
+    push({
+      id: `app-${app.number}-followup`,
+      type: 'follow-up',
+      recommendation: 'Follow Up',
+      priority: app.ageDays >= 14 ? 'high' : 'medium',
+      urgency: app.ageDays >= 14 ? 'now' : 'soon',
+      company: app.company,
+      role: app.role,
+      number: app.number,
+      score: app.scoreRaw,
+      headline: `Preparar seguimiento para ${app.company}`,
+      label: `${app.company} - ${app.role}`,
+      reason: `Lleva ${app.ageDays} dias en estado ${app.status}. Conviene revisar cadencia y redactar seguimiento si procede.`,
+      primaryAction: 'Preparar follow-up',
+      targetView: 'tracker',
+      selectKind: 'app',
+      selectId: app.number,
+    });
+  }
+
+  const pending = pipeline.filter(entry => !entry.done);
+  const duplicates = pending.filter(entry => entry.duplicateCandidate || entry.evaluatedCandidate);
+  for (const entry of duplicates.slice(0, 2)) {
+    push({
+      id: `pipeline-${entry.id}-duplicate`,
+      type: 'discard',
+      recommendation: 'Discard',
+      priority: 'medium',
+      company: entry.company,
+      role: entry.role,
+      label: entry.company || entry.sourceHost || entry.url,
+      headline: `Limpiar posible duplicada: ${entry.company || entry.sourceHost || 'oferta'}`,
+      reason: entry.evaluatedCandidate ? 'Parece ya evaluada o registrada; evita duplicar trabajo.' : 'Aparece como URL duplicada en la cola.',
+      primaryAction: 'Revisar cola',
+      targetView: 'opportunities',
+      selectKind: 'pipeline',
+      selectId: entry.id,
+    });
+  }
+  for (const entry of pending.filter(entry => !entry.duplicateCandidate && !entry.evaluatedCandidate).slice(0, 4)) {
+    push({
+      id: `pipeline-${entry.id}-evaluate`,
+      type: 'evaluate',
+      recommendation: 'Review',
+      priority: 'medium',
+      company: entry.company,
+      role: entry.role,
+      label: entry.company || entry.sourceHost || entry.url,
+      headline: `Evaluar ${entry.company || entry.sourceHost || 'oportunidad pendiente'}`,
+      reason: 'Esta oportunidad aun no tiene scoring, legitimidad ni decision recomendada.',
+      primaryAction: 'Evaluar oferta',
+      targetView: 'opportunities',
+      selectKind: 'pipeline',
+      selectId: entry.id,
+    });
+  }
+
+  const lowFit = apps
+    .filter(app => app.status === 'Evaluated' && typeof app.score === 'number' && app.score < 4)
+    .sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
+  for (const app of lowFit.slice(0, 3)) {
+    push({
+      id: `app-${app.number}-discard`,
+      type: 'discard',
+      recommendation: 'Discard',
+      priority: 'medium',
+      urgency: 'later',
+      company: app.company,
+      role: app.role,
+      number: app.number,
+      score: app.scoreRaw,
+      headline: `Descartar o justificar ${app.company}`,
+      label: `${app.company} - ${app.role} (${app.scoreRaw || 'sin score'})`,
+      reason: 'Score por debajo de 4.0/5. Career-Ops recomienda no aplicar salvo razon estrategica fuerte.',
+      primaryAction: 'Revisar descarte',
+      targetView: 'tracker',
+      selectKind: 'app',
+      selectId: app.number,
+    });
+  }
+
+  const missing = Object.entries(checks).filter(([, ok]) => !ok).map(([key]) => key);
+  if (missing.length) {
+    push({
+      id: 'setup-missing',
+      type: 'setup',
+      recommendation: 'Improve Context',
+      priority: 'low',
+      headline: 'Completar memoria del sistema',
+      label: `Faltan: ${missing.join(', ')}`,
+      reason: 'Los datos incompletos reducen la calidad de scoring, CVs y recomendaciones.',
+      primaryAction: 'Revisar sistema',
+      targetView: 'system',
+      missing,
+    });
+  }
+
+  if (!actions.length) {
+    push({
+      id: 'scan-new-opportunities',
+      type: 'scan',
+      recommendation: 'Review',
+      priority: 'low',
+      urgency: 'later',
+      headline: 'Escanear nuevas oportunidades',
+      label: 'No hay decisiones urgentes',
+      reason: 'El pipeline esta limpio. Buen momento para descubrir ofertas nuevas o revisar patrones.',
+      primaryAction: 'Escanear portales',
+      targetView: 'opportunities',
+    });
+  }
+
+  return actions.sort((a, b) => actionPriorityRank(a) - actionPriorityRank(b)).slice(0, 9);
+}
+
 function loadStates() {
   const parsed = yaml.load(readText(userFiles.states, 'states: []')) || {};
   const states = parsed.states || [];
@@ -382,7 +566,7 @@ function updateApplicationStatus(num, status) {
     updated = true;
     return `| ${cells.join(' | ')} |`;
   });
-  if (!updated) throw Object.assign(new Error(`Aplicación #${target} no encontrada`), { status: 404 });
+  if (!updated) throw Object.assign(new Error(`AplicaciÃ³n #${target} no encontrada`), { status: 404 });
   writeFileSync(userFiles.applications, next.join('\n'), 'utf-8');
   return state;
 }
@@ -435,6 +619,183 @@ function enrichPipelineEntries(entries) {
       evaluatedCandidate: Boolean(appUrls.has(entry.url) || appKeys.has(pairKey)),
     };
   });
+}
+
+function sourceConfidence(source = '') {
+  const value = String(source).toLowerCase();
+  if (value.includes('-api') || value.includes('greenhouse') || value.includes('ashby') || value.includes('lever')) {
+    return { level: 'high', label: 'Alta', reason: 'Detectada desde API o ATS estructurado.' };
+  }
+  if (value.includes('local-parser')) {
+    return { level: 'medium', label: 'Media', reason: 'Detectada por parser local configurado.' };
+  }
+  if (value.includes('websearch')) {
+    return { level: 'medium', label: 'Media', reason: 'Detectada via busqueda web; conviene verificar vigencia.' };
+  }
+  return { level: 'unknown', label: 'Sin clasificar', reason: 'Fuente no clasificada.' };
+}
+
+function discoveryStatusLabel(status = '') {
+  const value = String(status || '').trim();
+  if (value === 'added') return 'imported';
+  if (value.startsWith('skipped_expired')) return 'closed';
+  if (value.startsWith('skipped_no_apply')) return 'no_apply_control';
+  if (value.startsWith('skipped_invalid') || value.startsWith('skipped_blocked')) return 'blocked';
+  return value || 'unknown';
+}
+
+function parseScanHistory() {
+  const text = readText(userFiles.scanHistory);
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const rows = [];
+  for (const [lineIndex, line] of lines.entries()) {
+    if (lineIndex === 0 && /^url\tfirst_seen\t/i.test(line)) continue;
+    const [url = '', firstSeen = '', portal = '', title = '', company = '', status = '', location = ''] = line.split('\t');
+    if (!url) continue;
+    rows.push({
+      id: String(rows.length),
+      url,
+      firstSeen,
+      portal,
+      title,
+      company,
+      status: discoveryStatusLabel(status),
+      rawStatus: status || '',
+      location,
+      sourceHost: getSourceHost(url),
+      confidence: sourceConfidence(portal),
+    });
+  }
+  return rows;
+}
+
+function buildScannerDiscovery({ limit = 80 } = {}) {
+  const history = parseScanHistory();
+  const pipeline = parsePipeline().entries;
+  const apps = parseApplications();
+  const pipelineByUrl = new Map(pipeline.map(entry => [entry.url, entry]));
+  const appByUrl = new Map(apps.filter(app => app.jobUrl).map(app => [app.jobUrl, app]));
+  const appByPair = new Map(apps.map(app => [`${normalizeKey(app.company)}|${normalizeKey(app.role)}`, app]));
+  const recent = history.slice(-Math.max(limit, 1)).reverse().map(entry => {
+    const pipelineHit = pipelineByUrl.get(entry.url);
+    const pairHit = appByPair.get(`${normalizeKey(entry.company)}|${normalizeKey(entry.title)}`);
+    const appHit = appByUrl.get(entry.url) || pairHit;
+    const state = appHit
+      ? 'evaluated'
+      : pipelineHit?.done
+        ? 'processed'
+        : pipelineHit
+          ? 'pending'
+          : entry.status === 'imported'
+            ? 'missing_from_pipeline'
+            : entry.status;
+    const recommendedAction = state === 'pending'
+      ? 'Evaluar oferta'
+      : state === 'evaluated'
+        ? 'Abrir evaluacion'
+        : state === 'closed'
+          ? 'Ignorar cerrada'
+          : state === 'no_apply_control'
+            ? 'Revisar manualmente'
+            : state === 'missing_from_pipeline'
+              ? 'Reimportar o verificar'
+              : 'Revisar';
+    return {
+      ...entry,
+      state,
+      recommendedAction,
+      pipelineId: pipelineHit?.id || '',
+      applicationNumber: appHit?.number || '',
+      score: appHit?.scoreRaw || '',
+      duplicateCandidate: Boolean(pipelineHit?.duplicateCandidate),
+      evaluatedCandidate: Boolean(appHit || pipelineHit?.evaluatedCandidate),
+    };
+  });
+  const summary = recent.reduce((acc, entry) => {
+    acc.total += 1;
+    acc[entry.state] = (acc[entry.state] || 0) + 1;
+    if (entry.confidence?.level === 'high') acc.highConfidence += 1;
+    return acc;
+  }, { total: 0, pending: 0, evaluated: 0, processed: 0, closed: 0, no_apply_control: 0, missing_from_pipeline: 0, blocked: 0, highConfidence: 0 });
+  return {
+    ok: true,
+    summary,
+    entries: recent,
+    latestDate: recent[0]?.firstSeen || '',
+    guidance: recent.some(entry => entry.state === 'pending')
+      ? 'Hay ofertas descubiertas pendientes de evaluar.'
+      : 'No hay ofertas nuevas pendientes; puedes escanear portales o revisar filtros.',
+  };
+}
+
+function parseListInput(value) {
+  if (Array.isArray(value)) return value.map(item => String(item).trim()).filter(Boolean);
+  return String(value || '')
+    .split(/\r?\n|,/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function readPortalsConfig() {
+  return yaml.load(readText(userFiles.portals, '{}')) || {};
+}
+
+function scannerStrategyConfig() {
+  const config = readPortalsConfig();
+  const companies = (config.tracked_companies || []).map((company, index) => ({
+    index,
+    name: company.name || '',
+    enabled: company.enabled !== false,
+    provider: company.provider || '',
+    scanMethod: company.scan_method || '',
+    careersUrl: company.careers_url || '',
+    api: company.api || '',
+  })).filter(company => company.name);
+  const enabled = companies.filter(company => company.enabled);
+  return {
+    ok: true,
+    titleFilter: {
+      positive: config.title_filter?.positive || [],
+      negative: config.title_filter?.negative || [],
+    },
+    locationFilter: {
+      alwaysAllow: config.location_filter?.always_allow || [],
+      allow: config.location_filter?.allow || [],
+      block: config.location_filter?.block || [],
+    },
+    companies,
+    summary: {
+      companies: companies.length,
+      enabledCompanies: enabled.length,
+      disabledCompanies: companies.length - enabled.length,
+      positiveKeywords: (config.title_filter?.positive || []).length,
+      negativeKeywords: (config.title_filter?.negative || []).length,
+      allowedLocations: (config.location_filter?.allow || []).length,
+      blockedLocations: (config.location_filter?.block || []).length,
+    },
+    sourceFile: 'portals.yml',
+  };
+}
+
+function updateScannerStrategy(body = {}) {
+  const config = readPortalsConfig();
+  config.title_filter = config.title_filter || {};
+  config.location_filter = config.location_filter || {};
+  if ('positive' in body) config.title_filter.positive = parseListInput(body.positive);
+  if ('negative' in body) config.title_filter.negative = parseListInput(body.negative);
+  if ('allowLocations' in body) config.location_filter.allow = parseListInput(body.allowLocations);
+  if ('blockLocations' in body) config.location_filter.block = parseListInput(body.blockLocations);
+  if ('alwaysAllowLocations' in body) config.location_filter.always_allow = parseListInput(body.alwaysAllowLocations);
+  if (body.enabledCompanies && typeof body.enabledCompanies === 'object') {
+    const enabledByName = new Map(Object.entries(body.enabledCompanies).map(([name, enabled]) => [normalizeKey(name), Boolean(enabled)]));
+    config.tracked_companies = (config.tracked_companies || []).map(company => {
+      const key = normalizeKey(company?.name || '');
+      if (!key || !enabledByName.has(key)) return company;
+      return { ...company, enabled: enabledByName.get(key) };
+    });
+  }
+  writeFileSync(userFiles.portals, yaml.dump(config, { lineWidth: 120, noRefs: true }), 'utf-8');
+  return scannerStrategyConfig();
 }
 
 function writePipelineEntries(entries) {
@@ -685,10 +1046,18 @@ function buildLearningProposal(body) {
   const signal = String(body.signal || body.decision || 'decision del usuario').trim();
   const reason = String(body.reason || body.notes || '').trim();
   const score = String(body.score || '').trim();
+  const feedbackType = String(body.feedbackType || body.template || 'general').trim();
+  const futureAdjustment = String(body.futureAdjustment || '').trim() || {
+    score_too_high: 'Bajar prioridad a ofertas parecidas salvo que haya evidencia fuerte de encaje, compensacion o motivacion.',
+    would_not_apply: 'Recomendar descarte mas rapido cuando aparezcan senales similares.',
+    missed_experience: 'Buscar y ponderar mejor esta experiencia en cv.md, _profile.md o article-digest.md antes de puntuar.',
+    voice_mismatch: 'Ajustar respuestas para sonar mas como el candidato y menos corporativas.',
+  }[feedbackType] || 'Reforzar esta preferencia en futuras evaluaciones y filtros de pipeline.';
   const recommendation = [
+    `- Tipo de aprendizaje: ${feedbackType}.`,
     `- Decision observada: ${signal} en ${company} / ${role}${score ? ` (score ${score})` : ''}.`,
     reason ? `- Motivo del usuario: ${reason}` : '- Motivo del usuario: pendiente de concretar.',
-    '- Ajuste sugerido: reforzar esta preferencia en futuras evaluaciones y filtros de pipeline.',
+    `- Ajuste sugerido: ${futureAdjustment}`,
   ].join('\n');
   return {
     destination: 'profileMode',
@@ -912,6 +1281,11 @@ function evaluateProject(body) {
 function moduleContext(body = {}) {
   const report = body.reportId ? readReportById(String(body.reportId)) : null;
   const profile = yaml.load(readText(userFiles.profile, '{}')) || {};
+  const profileMode = readText(userFiles.profileMode);
+  const writingStyle = [
+    extractMarkdownSection(profileMode, 'Writing Style'),
+    body.writingStyle,
+  ].filter(Boolean).join('\n\n').slice(0, 9000);
   return {
     report,
     company: body.company || report?.company || 'Company',
@@ -920,12 +1294,20 @@ function moduleContext(body = {}) {
     jobSignal: body.jobSignal || report?.sections?.match || report?.tldr || '',
     candidateContext: [
       readText(userFiles.cv),
-      readText(userFiles.profileMode),
+      profileMode,
       readText(userFiles.articleDigest),
     ].filter(Boolean).join('\n\n').slice(0, 24000),
     compensation: body.compensation || profile.compensation?.target || profile.salary?.target || '',
     workAuthorization: body.workAuthorization || profile.work_authorization || '',
+    writingStyle,
+    profile,
   };
+}
+
+function extractMarkdownSection(markdown = '', heading = '') {
+  const escaped = String(heading).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^##\\s+${escaped}\\s*$([\\s\\S]*?)(?=^##\\s+|\\Z)`, 'im');
+  return markdown.match(pattern)?.[1]?.trim() || '';
 }
 
 function artifactMarkdownFor(kind, result) {
@@ -946,6 +1328,7 @@ function createAssistedModuleJob(kind, body) {
     push('progress', `Preparando ${kind} asistido`);
     let result;
     if (kind === 'apply-assistant') result = await runApplyAssistant(body, context);
+    else if (kind === 'form-reader') result = await runFormReader(body, context);
     else if (kind === 'deep-research') result = await runDeepResearch(body, context);
     else if (kind === 'interview-prep') result = await runInterviewPrep(body, context);
     else if (kind === 'outreach') result = await runOutreach(body, context);
@@ -962,6 +1345,7 @@ function createAssistedModuleJob(kind, body) {
 async function runAssistedModuleDryRun(kind, body) {
   const context = moduleContext(body);
   if (kind === 'apply-assistant') return runApplyAssistant(body, context);
+  if (kind === 'form-reader') return runFormReader(body, context);
   if (kind === 'deep-research') return runDeepResearch(body, context);
   if (kind === 'interview-prep') return runInterviewPrep(body, context);
   if (kind === 'outreach') return runOutreach(body, context);
@@ -1005,12 +1389,13 @@ async function handleApi(req, res, url) {
       metrics,
       priorities: {
         topApps: topApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'Lista para decidir' })),
-        lowApps: lowApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'Puntuación baja: recomienda descartar' })),
-        pendingPipeline: pendingPipeline.map(p => ({ id: p.id, url: p.url, company: p.company, role: p.role, sourceHost: p.sourceHost, action: 'Pendiente de evaluación' })),
+        lowApps: lowApps.map(a => ({ number: a.number, company: a.company, role: a.role, score: a.score, scoreRaw: a.scoreRaw, action: 'PuntuaciÃ³n baja: recomienda descartar' })),
+        pendingPipeline: pendingPipeline.map(p => ({ id: p.id, url: p.url, company: p.company, role: p.role, sourceHost: p.sourceHost, action: 'Pendiente de evaluaciÃ³n' })),
       },
       health: { ok: Object.values(checks).every(Boolean), checks },
       version: readText(userFiles.version, 'unknown').trim(),
       runningJobs,
+      nextActions: buildNextActions({ apps, pipeline, checks }),
       pipelineCount: pending.length,
     });
   }
@@ -1018,34 +1403,8 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/next-actions') {
     const apps = parseApplications();
     const pipeline = parsePipeline().entries;
-    const pending = pipeline.filter(e => !e.done);
-    const actions = [];
-
-    // Top scoring apps needing decision
-    const topUndecided = apps.filter(a => a.score >= 4 && a.status === 'Evaluated');
-    for (const a of topUndecided.slice(0, 3)) {
-      actions.push({ type: 'decide', priority: 'high', company: a.company, role: a.role, number: a.number, score: a.scoreRaw, label: `Decidir: ${a.company} – ${a.role} (${a.scoreRaw})` });
-    }
-
-    // Low scoring apps that should be discarded
-    const lowUndecided = apps.filter(a => typeof a.score === 'number' && a.score < 4 && a.status === 'Evaluated');
-    for (const a of lowUndecided.slice(0, 2)) {
-      actions.push({ type: 'discard', priority: 'medium', company: a.company, role: a.role, number: a.number, score: a.scoreRaw, label: `Descartar: ${a.company} – ${a.role} (${a.scoreRaw})` });
-    }
-
-    // Pending pipeline items
-    if (pending.length > 0) {
-      actions.push({ type: 'evaluate', priority: 'medium', count: pending.length, label: `${pending.length} oferta${pending.length > 1 ? 's' : ''} pendiente${pending.length > 1 ? 's' : ''} de evaluación` });
-    }
-
-    // Health issues
     const checks = healthChecks();
-    const missing = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k);
-    if (missing.length > 0) {
-      actions.push({ type: 'setup', priority: 'low', missing, label: `Setup incompleto: faltan ${missing.join(', ')}` });
-    }
-
-    return json(res, 200, { ok: true, actions: actions.sort((a, b) => { const p = { high: 0, medium: 1, low: 2 }; return (p[a.priority] ?? 3) - (p[b.priority] ?? 3); }) });
+    return json(res, 200, { ok: true, actions: buildNextActions({ apps, pipeline, checks }) });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/setup/readiness') {
@@ -1234,13 +1593,26 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/scanner/history') {
-    const historyPath = path.join(ROOT, 'data', 'scan-history.tsv');
-    const lines = readText(historyPath).split(/\r?\n/).filter(Boolean).slice(-200);
+    const lines = readText(userFiles.scanHistory).split(/\r?\n/).filter(Boolean).slice(-200);
     const entries = lines.map((line, index) => {
       const cells = line.split('\t');
       return { index, raw: line, cells, url: cells.find(cell => /^https?:\/\//i.test(cell)) || '' };
     });
     return json(res, 200, { ok: true, entries });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/scanner/discovery') {
+    const limit = Number.parseInt(url.searchParams.get('limit') || '80', 10);
+    return json(res, 200, buildScannerDiscovery({ limit: Number.isFinite(limit) ? limit : 80 }));
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/scanner/strategy') {
+    return json(res, 200, scannerStrategyConfig());
+  }
+
+  if (req.method === 'PUT' && url.pathname === '/api/scanner/strategy') {
+    const body = await parseJsonBody(req);
+    return json(res, 200, updateScannerStrategy(body));
   }
 
   if (req.method === 'POST' && url.pathname === '/api/jobs/batch') {
@@ -1302,7 +1674,7 @@ async function handleApi(req, res, url) {
     const body = await parseJsonBody(req);
     let jdText = String(body.jdText || '').trim();
     const sourceUrl = String(body.url || '').trim();
-    if (!jdText && !sourceUrl) return json(res, 400, { error: 'Pega una descripción o indica una URL.' });
+    if (!jdText && !sourceUrl) return json(res, 400, { error: 'Pega una descripciÃ³n o indica una URL.' });
     if (!jdText && sourceUrl) jdText = await extractJobText(sourceUrl);
     mkdirSync(path.join(ROOT, 'jds'), { recursive: true });
     const name = `${new Date().toISOString().slice(0, 10)}-${slugify(body.title || sourceUrl)}-${Date.now()}.txt`;
@@ -1378,10 +1750,10 @@ async function handleApi(req, res, url) {
         }
       } else {
         setStep(push, steps, 'url-guard', 'completed', { url: null });
-        setStep(push, steps, 'liveness', 'partial', { reason: 'No se indicó URL' });
+        setStep(push, steps, 'liveness', 'partial', { reason: 'No se indicÃ³ URL' });
         setStep(push, steps, 'jd-extraction', jdText ? 'completed' : 'failed', { trust: extractionTrust });
       }
-      if (!jdText) throw new Error('Pega una descripción o indica una URL.');
+      if (!jdText) throw new Error('Pega una descripciÃ³n o indica una URL.');
       mkdirSync(path.join(ROOT, 'jds'), { recursive: true });
       const name = `${new Date().toISOString().slice(0, 10)}-${slugify(body.title || sourceUrl || 'job')}-${Date.now()}.txt`;
       const rel = `jds/${name}`;
@@ -1398,14 +1770,14 @@ async function handleApi(req, res, url) {
       if (evaluation.stderr) push('warning', evaluation.stderr);
       if (!evaluation.ok) {
         setStep(push, steps, 'evaluation', 'failed');
-        throw new Error(evaluation.error || 'La evaluación ha fallado');
+        throw new Error(evaluation.error || 'La evaluaciÃ³n ha fallado');
       }
       setStep(push, steps, 'evaluation', body.mock ? 'partial' : 'completed', { trust: body.mock ? 'untrusted-mock' : extractionTrust });
 
       setStep(push, steps, 'tracker-merge', 'running');
       const merge = await commandText(process.execPath, ['merge-tracker.mjs']);
       if (merge.stdout) push('progress', merge.stdout);
-      if (!merge.ok) throw new Error(merge.error || 'La integración del tracker ha fallado');
+      if (!merge.ok) throw new Error(merge.error || 'La integraciÃ³n del tracker ha fallado');
       setStep(push, steps, 'tracker-merge', 'completed');
 
       const report = latestReportAfter(before);
@@ -1449,7 +1821,7 @@ async function handleApi(req, res, url) {
           setStep(push, steps, 'apply-draft', 'completed', { path: applyPath });
           push('artifact', JSON.stringify({ step: 'draft-answers', path: applyPath, draft: applyDraft.markdown }));
         } else {
-          setStep(push, steps, 'apply-draft', 'partial', { reason: 'Puntuación por debajo de 4.5' });
+          setStep(push, steps, 'apply-draft', 'partial', { reason: 'PuntuaciÃ³n por debajo de 4.5' });
         }
         push('artifact', JSON.stringify({ step: 'completed', report: report.path, reportPdf: reportPdfRel, cvPdf: pdfRel, steps }));
       } else {
@@ -1464,7 +1836,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/jobs/report-pdf') {
     const body = await parseJsonBody(req);
     const input = resolveAllowedPath(String(body.reportPath || ''), ['reports']);
-    if (!input || !existsSync(input)) return json(res, 400, { error: 'Hace falta una ruta válida dentro de reports/*.' });
+    if (!input || !existsSync(input)) return json(res, 400, { error: 'Hace falta una ruta vÃ¡lida dentro de reports/*.' });
     mkdirSync(path.join(ROOT, 'output'), { recursive: true });
     const outRel = `output/${path.basename(input, '.md')}.pdf`;
     const job = createJob('report-pdf', process.execPath, ['generate-report-pdf.mjs', path.relative(ROOT, input), outRel]);
@@ -1530,6 +1902,7 @@ async function handleApi(req, res, url) {
       return json(res, 202, { ok: true, jobId: job.id });
     }
     const report = body.reportId ? readReportById(String(body.reportId)) : null;
+    const context = moduleContext(body);
     return json(res, 200, { ok: true, result: draftApplicationResponses({
       ...body,
       company: body.company || report?.company,
@@ -1537,7 +1910,18 @@ async function handleApi(req, res, url) {
       reportSummary: body.reportSummary || report?.tldr,
       basedOn: report?.id,
       candidateSummary: 'the candidate profile and CV stored in Career-Ops',
+      writingStyle: context.writingStyle,
     }) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/modules/form-reader') {
+    const body = await parseJsonBody(req);
+    if (body.mode === 'assisted') {
+      if (body.dryRun) return json(res, 200, { ok: true, result: await runAssistedModuleDryRun('form-reader', body), dryRun: true });
+      const job = createAssistedModuleJob('form-reader', body);
+      return json(res, 202, { ok: true, jobId: job.id });
+    }
+    return json(res, 200, { ok: true, result: await runAssistedModuleDryRun('form-reader', body) });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/modules/deep-research') {
@@ -1615,7 +1999,7 @@ function runScriptJson(args) {
       try {
         resolve({ ok: code === 0, data: JSON.parse(stdout), stderr });
       } catch {
-        resolve({ ok: false, data: null, stdout, stderr, error: 'El script no devolvió JSON' });
+        resolve({ ok: false, data: null, stdout, stderr, error: 'El script no devolviÃ³ JSON' });
       }
     });
   });

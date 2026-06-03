@@ -145,6 +145,14 @@ try {
   await assertOk('/api/integrity/verify', data => 'ok' in data);
   const learning = await assertPost('/api/learning/proposal', { company: 'Example', role: 'Role', decision: 'skip' }, data => data.ok && data.proposal?.content);
   assert(learning.proposal.destination === 'profileMode', 'learning proposal is not routed to the user profile mode file');
+  const guidedLearning = await assertPost('/api/learning/proposal', {
+    company: 'Example',
+    role: 'Role',
+    feedbackType: 'score_too_high',
+    decision: 'score_too_high',
+  }, data => data.ok && data.proposal?.content);
+  assertIncludes(guidedLearning.proposal.content, 'Tipo de aprendizaje: score_too_high', 'guided learning type');
+  assertIncludes(guidedLearning.proposal.content, 'Ajuste sugerido', 'guided learning adjustment');
 
   const deepResearch = await assertPost('/api/modules/deep-research', { company: 'Example', role: 'Role' }, data => data.ok && data.markdown);
   assertIncludes(deepResearch.markdown, 'Return structured findings with sources', 'deep research module');
@@ -159,6 +167,7 @@ try {
   assert(applyAssistant.result.responses.length === 3, 'apply assistant did not draft every requested answer');
   assertIncludes(applyAssistant.result.markdown, 'Review every answer before pasting it into the form.', 'apply assistant guardrail');
   assertIncludes(applyAssistant.result.markdown, 'Do not submit until the candidate gives final approval.', 'apply assistant guardrail');
+  assertIncludes(applyAssistant.result.markdown, 'Writing style applied', 'apply assistant personal voice');
   const assistedApply = await assertPost('/api/modules/apply-assistant', {
     company: 'Example',
     role: 'Role',
@@ -167,6 +176,23 @@ try {
     questions: ['Why this role?'],
   }, data => data.ok && data.dryRun && data.result?.markdown);
   assertIncludes(assistedApply.result.markdown, 'No automatic submit', 'assisted apply safety');
+  assert(assistedApply.result.writingStyleApplied === true, 'assisted apply did not receive personal writing style');
+  assertIncludes(assistedApply.result.markdown, 'Safe Fill Plan', 'assisted apply safe fill plan');
+
+  const formReader = await assertPost('/api/modules/form-reader', {
+    company: 'Example',
+    role: 'Role',
+    mode: 'assisted',
+    dryRun: true,
+    allowLocal: true,
+    url: `${base}/offer-with-apply-fixture.html`,
+  }, data => data.ok && data.dryRun && data.result?.form?.fields?.length >= 4);
+  assertIncludes(formReader.result.markdown, 'Read-only inspection', 'form reader safety');
+  assertIncludes(formReader.result.markdown, 'Auto-discovered form', 'form reader auto discovery');
+  assertIncludes(formReader.result.markdown, 'Safe Fill Plan', 'form reader safe fill plan');
+  assert(formReader.result.fillPlan.safePrefill >= 1, 'form reader did not mark stable profile fields as safe prefill');
+  assertIncludes(formReader.result.markdown, 'Why this role?', 'form reader field extraction');
+  assertIncludes(formReader.result.markdown, 'Submit application', 'form reader submit detection');
 
   const outreach = await assertPost('/api/modules/outreach', { company: 'Example', role: 'Role', type: 'recruiter', maxLength: 180 }, data => data.ok && data.result?.message);
   assert(outreach.result.withinLimit, 'outreach module exceeded requested length');
@@ -185,6 +211,12 @@ try {
   await assertPost('/api/modules/training', { title: 'Course', scores: { northStar: 4, recruiterSignal: 3 } }, data => data.ok && data.result?.verdict);
   await assertPost('/api/modules/project', { title: 'Project', scores: { targetSignal: 4, demoAbility: 4 } }, data => data.ok && data.result?.verdict);
   await assertOk('/api/scanner/history', data => data.ok && Array.isArray(data.entries));
+  const discovery = await assertOk('/api/scanner/discovery', data => data.ok && data.summary && Array.isArray(data.entries));
+  assert('pending' in discovery.summary, 'scanner discovery summary is missing pending count');
+  if (discovery.entries.length) assert(discovery.entries[0].recommendedAction, 'scanner discovery entries need an action');
+  const strategy = await assertOk('/api/scanner/strategy', data => data.ok && data.titleFilter && data.summary && Array.isArray(data.companies));
+  assert(Array.isArray(strategy.titleFilter.positive), 'scanner strategy needs positive title keywords');
+  assert('enabledCompanies' in strategy.summary, 'scanner strategy summary is missing enabled company count');
   await assertPost('/api/jobs/batch', { dryRun: true, tsv: 'https://example.com/jobs/1\tExample\tRole' }, data => data.ok && data.dryRun && data.rows.length === 1);
   await assertOk('/api/followups', data => 'ok' in data);
   await assertOk('/api/patterns', data => 'ok' in data);

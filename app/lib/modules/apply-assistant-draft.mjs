@@ -40,6 +40,28 @@ function answerFor(question, context) {
   ].filter(Boolean).join(' ');
 }
 
+function applyPersonalVoice(answer, question, context) {
+  if (!context.writingStyle) return answer;
+  const q = questionText(question, 0).toLowerCase();
+  if (/salary|compensation|expect/i.test(q) || /visa|work authorization|authori[sz]ation/i.test(q)) {
+    return answer;
+  }
+  const clean = answer.replace(/\s+/g, ' ').trim();
+  const firstPerson = clean
+    .replace(/^A relevant example from my background is/i, 'Un ejemplo muy claro en mi caso es')
+    .replace(/^My background is a good match for this requirement\./i, 'Creo que encajo especialmente bien aqui por una razon sencilla.')
+    .replace(/I would keep the answer grounded in the specific team needs rather than giving a generic application response\./i, 'Intentaria aterrizarlo siempre a necesidades reales del equipo, no a una respuesta generica de candidatura.');
+  if (/why.*(company|role)|motivation|interest/i.test(q)) {
+    return [
+      `Lo primero: ${context.company} me interesa porque el rol conecta muy bien con el tipo de trabajo donde mas valor puedo aportar.`,
+      context.jobSignal ? `La parte que mas me llama es esta: ${context.jobSignal}.` : '',
+      context.proofPoints[0] ? `Y no lo digo en abstracto: ya he construido cosas muy parecidas con ${context.proofPoints[0]}.` : '',
+      !context.proofPoints[0] && !context.jobSignal ? 'Mi punto fuerte esta justo ahi: unir negocio, marketing y parte tecnica para convertir ideas en sistemas que funcionan de verdad.' : '',
+    ].filter(Boolean).join('\n\n');
+  }
+  return firstPerson;
+}
+
 export function draftApplicationResponses(input = {}) {
   const company = text(input.company, 'Company');
   const role = text(input.role, 'Role');
@@ -54,13 +76,16 @@ export function draftApplicationResponses(input = {}) {
     compensation: text(input.compensation || input.salaryExpectation),
     workAuthorization: text(input.workAuthorization || input.authorization),
     proofPoints: list(input.proofPoints),
+    writingStyle: text(input.writingStyle),
   };
   const responses = questions.map((question, index) => ({
     question: questionText(question, index),
-    answer: answerFor(question, context),
+    answer: applyPersonalVoice(answerFor(question, context), question, context),
   }));
   const markdown = [
     `## Responses for ${company} - ${role}`,
+    '',
+    context.writingStyle ? 'Writing style applied: personal voice from `modes/_profile.md` / writing samples. Keep answers conversational, concrete, first-person, and non-corporate.' : '',
     '',
     input.basedOn ? `Based on: ${text(input.basedOn)}` : '',
     '',

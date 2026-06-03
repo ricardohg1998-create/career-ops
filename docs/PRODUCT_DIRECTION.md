@@ -28,6 +28,28 @@ It should optimize for fewer, better applications. The interface must never enco
 6. Track the outcome.
 7. Learn from feedback, rejections, preferences, and missed context.
 
+## Current Implementation Status
+
+Implemented in the local web app:
+
+- Home answers the North Star with ranked `/api/next-actions`.
+- Tracking details include an Application Console for the selected application.
+- Application Console can launch form reading, answer drafting, deep research, interview prep, and assisted application prep.
+- Form Reader can start from the offer URL, discover likely apply links, inspect the final form read-only, and classify detected fields.
+- Apply Assistant can also start from the offer URL when a separate form URL is not known.
+- Draft answers use the candidate's personal writing style from `modes/_profile.md`.
+- Safe Fill Plan separates low-risk profile prefill, narrative drafts for review, sensitive answers, manual choices, and uploads.
+- Guided learning proposals capture corrections such as score-too-high, would-not-apply, missed experience, and voice mismatch before writing to user-layer files.
+- Opportunities includes a visual discovery panel backed by scan history, with pending/evaluated/closed state, source confidence, and direct actions to evaluate or reimport discovered offers.
+- Profile includes a scanner strategy editor for target keywords, blocked keywords, location filters, and enabled companies in `portals.yml`.
+
+Still open:
+
+- Automatic offer discovery now has a visual inbox layer and editable scanner strategy, but recurring scheduling still needs to be exposed in the interface.
+- Guided browser filling needs a visible, user-supervised field-by-field flow.
+- The UI should persist final application answers and user-confirmed outcomes after submission.
+- The profile view should expose recent learning and writing-style calibration more clearly.
+
 ## Offer Management And Assisted Applying
 
 The visual interface should let the user manage offers end to end:
@@ -40,6 +62,27 @@ The visual interface should let the user manage offers end to end:
 - Record the final outcome after the user confirms what happened.
 
 Applying from the interface is possible, but it must be framed as assisted applying rather than autonomous submission.
+
+### URL And Form Discovery
+
+The user should not have to know the final application form URL in advance.
+
+Career-Ops should support three levels of automation:
+
+1. Offer discovery
+   - Scanner and configured portals find new roles automatically.
+   - New roles land in Opportunities with dedupe and source metadata.
+   - The user can still paste a manual URL when needed.
+
+2. Apply-link discovery
+   - Given a job posting URL, Form Reader searches visible links and known ATS patterns such as Greenhouse, Lever, Ashby, Workable, Teamtailor, and company careers pages.
+   - It follows likely apply links read-only and reports the discovered form URL.
+   - It never clicks submit/send/apply.
+
+3. Form understanding
+   - Extract visible questions, required fields, options, upload requirements, and submit-like controls.
+   - Classify each field into safe profile prefill, draft for review, sensitive review, manual choice, or manual upload.
+   - Let the user move from Form Reader to Apply Assistant without copying the URL or field list by hand.
 
 ### Assisted Applying Modes
 
@@ -67,6 +110,7 @@ For each evaluated opportunity, the interface should expose an application conso
    - Upload requirements.
    - Dropdowns and yes/no questions.
    - Missing data the user must provide.
+   - Safe Fill Plan with explicit risk class per field.
 
 3. Draft Answers
    - One answer per detected question.
@@ -118,6 +162,8 @@ The system should get better as the user corrects it. Feedback such as "this sco
 - `config/profile.yml`
 - `modes/_profile.md`
 - `article-digest.md`
+
+Application answers should also follow the user's own writing style. The writing style lives in `modes/_profile.md` under `## Writing Style`; generated form answers should use it by default and expose a feedback path when the result does not sound like the candidate.
 
 ### Local Trust
 
@@ -195,8 +241,8 @@ Every opportunity should resolve to one of these product recommendations:
 
 ### Phase 3: Learning Capture
 
-- Add a feedback flow after evaluation and after status changes.
-- Turn feedback into safe edits in user-layer files.
+- Add a feedback flow after evaluation and after status changes. `[partly implemented]`
+- Turn feedback into safe edits in user-layer files. `[partly implemented]`
 - Keep a visible "candidate memory" area in Profile.
 
 ### Phase 4: Application Readiness
@@ -208,10 +254,17 @@ Every opportunity should resolve to one of these product recommendations:
   - CV generated.
   - Cover letter or answers drafted when relevant.
   - Human review pending.
-- Add an application console for the selected opportunity.
-- Support form URL inspection and question extraction.
+- Add an application console for the selected opportunity. `[implemented for applications/reports]`
+- Support form URL inspection and question extraction. `[implemented with offer-URL apply-link discovery]`
 - Let the user launch Draft Only, Form Reader, Guided Browser, or Subagent Prep.
 - Stop all assisted flows before final submit/send/apply.
+
+### Phase 6: Automatic Discovery Layer
+
+- Expand portal scanner coverage and make scan results visible as fresh inbox items. `[partly implemented]`
+- Add source confidence, dedupe reason, and live/closed signal per imported role. `[partly implemented]`
+- Add a scheduled scan path for recurring discovery.
+- Let the user approve target keywords and company lists from the visual Profile/System area. `[implemented in Profile]`
 
 ### Phase 5: Strategy Insights
 

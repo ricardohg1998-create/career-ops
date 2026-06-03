@@ -10,6 +10,7 @@ export const state = {
   jobs: [],
   nextActions: [],
   lastModuleResult: null,
+  currentModuleRequestId: 0,
   scanner: null,
   scannerSchedule: null,
   scannerStrategy: null,

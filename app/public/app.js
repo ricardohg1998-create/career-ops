@@ -719,6 +719,8 @@ function hydrateEvaluateFromSelection() {
   if (titleInput) titleInput.value = [ctx.company, ctx.role].filter(Boolean).join(' - ');
   if (jdInput && ctx.notes && (changed || !jdInput.value.trim())) {
     jdInput.value = `Contexto del informe seleccionado:\n${ctx.notes}`;
+    jdInput.dataset.sourceKind = 'hydrated-context';
+    jdInput.dataset.inputTrust = 'untrusted-context';
   }
   if ($('#evaluate-form')) $('#evaluate-form').dataset.contextKey = key;
 }
@@ -1347,6 +1349,14 @@ function resetProgressChecklist() {
   $$('#pipeline-progress li').forEach(li => { li.dataset.status = 'pending'; });
 }
 
+function evaluatePayload(form) {
+  const body = Object.fromEntries(new FormData(form));
+  const jdInput = form.elements.jdText;
+  body.sourceKind = jdInput?.dataset.sourceKind || (String(body.jdText || '').trim() ? 'manual-jd' : 'extracted-url');
+  body.inputTrust = jdInput?.dataset.inputTrust || (String(body.jdText || '').trim() ? 'trusted-manual' : 'trusted-playwright');
+  return body;
+}
+
 /* ═══════════════════════════════════════════
    CV / ARTIFACTS
    ═══════════════════════════════════════════ */
@@ -1413,6 +1423,7 @@ function modulePayload(form) {
   const reportId = reportIds.find(id => state.reports.some(report => report.id === id)) || ctx.reportId || '';
   const formUrl = data.formUrl || (data.kind === 'form-reader' ? (data.url || ctx.url) : '');
   return {
+    kind: data.kind,
     company: data.company || ctx.company,
     role: data.role || ctx.role,
     mode,
@@ -1505,27 +1516,33 @@ function renderModuleResult(result) {
   return JSON.stringify(result.result ?? result, null, 2);
 }
 
-function renderAssistantOutput(result) {
+function renderAssistantOutput(result, requestId = state.currentModuleRequestId, meta = {}) {
+  if (requestId !== state.currentModuleRequestId) return;
   const box = $('#module-output');
   const text = renderModuleResult(result);
   state.lastModuleResult = result;
   box.classList.remove('job-log', 'running');
   box.innerHTML = `
     <div class="assistant-output-head">
-      <strong>Resultado del asistente</strong>
-      <span>Revisa antes de copiar, enviar o aplicar</span>
+      <strong>${escapeHtml(moduleLabels[meta.kind] || 'Resultado del asistente')}</strong>
+      <span>${escapeHtml([meta.company, meta.role].filter(Boolean).join(' - ') || 'Revisa antes de copiar, enviar o aplicar')}</span>
     </div>
     ${renderFillPlanPanel(result)}
     <div class="assistant-markdown">${compactMdToHtml(text)}</div>
   `;
 }
 
-function renderAssistantLog(jobId) {
+function renderAssistantLog(jobId, requestId = state.currentModuleRequestId, meta = {}) {
   const box = $('#module-output');
+  box.dataset.requestId = String(requestId);
   box.classList.add('job-log', 'running');
-  box.textContent = `[trabajo] ${jobId}\n`;
+  box.textContent = `[trabajo] ${jobId}\nGenerando ${moduleLabels[meta.kind] || meta.kind || 'asistente'}...\n`;
   const source = new EventSource(`/api/jobs/${jobId}/events`);
   source.onmessage = event => {
+    if (requestId !== state.currentModuleRequestId) {
+      source.close();
+      return;
+    }
     const item = JSON.parse(event.data);
     if (item.type === 'artifact') {
       try {
@@ -1535,7 +1552,7 @@ function renderAssistantLog(jobId) {
             result: {
               markdown: artifact.result.markdown || artifact.result.result?.message || JSON.stringify(artifact.result, null, 2),
             },
-          });
+          }, requestId, meta);
           if (artifact.path) {
             $('#module-output').insertAdjacentHTML('beforeend', `<p class="assistant-artifact"><a href="/api/files?path=${encodeURIComponent(artifact.path)}" target="_blank" rel="noreferrer">Abrir archivo generado</a></p>`);
           }
@@ -1554,6 +1571,7 @@ function renderAssistantLog(jobId) {
     }
   };
   source.onerror = () => {
+    if (requestId !== state.currentModuleRequestId) return;
     source.close();
     notify('Conexión de eventos cerrada', 'warn');
   };
@@ -1771,6 +1789,10 @@ function wireEvents() {
   $('#application-search').addEventListener('input', renderApplications);
   $('#status-filter').addEventListener('change', renderApplications);
   $('#score-filter').addEventListener('change', renderApplications);
+  $('#evaluate-jd').addEventListener('input', event => {
+    event.currentTarget.dataset.sourceKind = 'manual-jd';
+    event.currentTarget.dataset.inputTrust = 'trusted-manual';
+  });
   $('#scan-open-btn').addEventListener('click', () => $('#scan-panel').classList.toggle('hidden'));
   $('#scan-open-btn').addEventListener('click', event => {
     event.currentTarget.setAttribute('aria-expanded', String(!$('#scan-panel').classList.contains('hidden')));
@@ -1815,11 +1837,30 @@ function wireEvents() {
   });
 
   $('#auto-pipeline-btn').addEventListener('click', async () => {
-    const body = Object.fromEntries(new FormData($('#evaluate-form')));
+    const form = $('#evaluate-form');
+    const body = evaluatePayload(form);
     if (!String(body.url || '').trim() && !String(body.jdText || '').trim()) {
       $('#evaluate-log').textContent = '[error] Pega una descripción o indica una URL.';
       return;
     }
+    if ((body.sourceKind === 'hydrated-context' || body.inputTrust === 'untrusted-context') && !String(body.url || '').trim()) {
+      $('#evaluate-log').textContent = '[error] El contexto seleccionado no es una oferta completa. Pega una JD real o usa una URL publica antes de ejecutar el flujo completo.';
+      return;
+    }
+    const confirmed = confirm([
+      'El flujo completo escribira archivos locales:',
+      '- jds/',
+      '- reports/',
+      '- batch/tracker-additions/ y data/applications.md',
+      '- output/ PDFs y CVs',
+      '',
+      'Continua solo si la JD o URL corresponde a una oferta real.'
+    ].join('\n'));
+    if (!confirmed) {
+      $('#evaluate-log').textContent = '[cancelado] No se escribieron archivos.';
+      return;
+    }
+    body.persistConfirmed = true;
     resetProgressChecklist();
     try {
       const result = await api('/api/jobs/auto-pipeline', { method: 'POST', body });
@@ -1898,17 +1939,28 @@ function wireEvents() {
 
   $('#module-form').addEventListener('submit', async event => {
     event.preventDefault();
-    const kind = new FormData(event.currentTarget).get('kind');
+    const form = event.currentTarget;
+    const payload = modulePayload(form);
+    const kind = payload.kind;
+    const requestId = state.currentModuleRequestId + 1;
+    state.currentModuleRequestId = requestId;
+    const output = $('#module-output');
+    output.classList.remove('job-log');
+    output.classList.add('running');
+    output.dataset.requestId = String(requestId);
+    output.innerHTML = `<div class="assistant-output-head"><strong>${escapeHtml(moduleLabels[kind] || 'Asistente')}</strong><span>Generando respuesta...</span></div>`;
     try {
-      const result = await api(`/api/modules/${kind}`, { method: 'POST', body: modulePayload(event.currentTarget) });
+      const result = await api(`/api/modules/${kind}`, { method: 'POST', body: payload });
+      if (requestId !== state.currentModuleRequestId) return;
       if (result.jobId) {
-        renderAssistantLog(result.jobId);
+        renderAssistantLog(result.jobId, requestId, payload);
         notify(`Módulo iniciado: ${result.jobId}`);
         return;
       }
-      renderAssistantOutput(result);
+      renderAssistantOutput(result, requestId, payload);
       notify('Asistente generado');
     } catch (err) {
+      if (requestId !== state.currentModuleRequestId) return;
       $('#module-output').classList.remove('job-log', 'running');
       $('#module-output').innerHTML = `<div class="assistant-error">Error: ${escapeHtml(err.message)}</div>`;
       notify(err.message, 'error');

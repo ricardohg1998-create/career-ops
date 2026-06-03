@@ -573,16 +573,25 @@ function loadStates() {
 }
 
 function normalizeStatus(raw) {
+  return findStatus(raw) || { id: 'evaluated', label: 'Evaluated' };
+}
+
+function findStatus(raw) {
   const { states, byLabel, byAlias } = loadStates();
   const clean = String(raw || '').replace(/\*\*/g, '').trim().toLowerCase();
-  const state = byLabel.get(clean) || byAlias.get(clean) || states.find(s => s.label === 'Evaluated');
-  return state || { id: 'evaluated', label: 'Evaluated' };
+  if (!clean) return null;
+  return byLabel.get(clean) || byAlias.get(clean) || null;
+}
+
+function requireValidStatus(raw) {
+  const state = findStatus(raw);
+  if (!state?.label) throw Object.assign(new Error('Estado no válido'), { status: 400 });
+  return state;
 }
 
 function updateApplicationStatus(num, status) {
   const target = Number.parseInt(num, 10);
-  const state = normalizeStatus(status);
-  if (!state?.label) throw Object.assign(new Error('Estado desconocido'), { status: 400 });
+  const state = requireValidStatus(status);
   const content = readText(userFiles.applications);
   const lines = content.split(/\r?\n/);
   let updated = false;
@@ -617,7 +626,9 @@ function appendApplicationOutcome(num, body = {}) {
   const app = parseApplications().find(row => row.number === target);
   if (!app) throw Object.assign(new Error(`Aplicación #${target} no encontrada`), { status: 404 });
   const dryRun = Boolean(body.dryRun);
-  const state = body.status && !dryRun ? updateApplicationStatus(target, body.status) : normalizeStatus(body.status || app.status);
+  const state = body.status
+    ? (dryRun ? requireValidStatus(body.status) : updateApplicationStatus(target, body.status))
+    : normalizeStatus(app.status);
   const outcome = String(body.outcome || state.label || 'decision').trim();
   const notes = String(body.notes || '').trim();
   const finalAnswers = String(body.finalAnswers || '').trim();
@@ -1520,6 +1531,51 @@ function setStep(push, steps, step, status, extra = {}) {
   push('artifact', JSON.stringify(payload), payload);
 }
 
+function markRemainingSteps(push, steps, status, reason, afterStep) {
+  const keys = Object.keys(steps);
+  const start = afterStep ? keys.indexOf(afterStep) + 1 : 0;
+  for (const step of keys.slice(Math.max(start, 0))) {
+    if (steps[step] === 'pending' || steps[step] === 'running') {
+      setStep(push, steps, step, status, { reason });
+    }
+  }
+}
+
+function isHydratedContextInput(body = {}) {
+  const sourceKind = String(body.sourceKind || '').trim();
+  const inputTrust = String(body.inputTrust || '').trim();
+  const jdText = String(body.jdText || '').trim();
+  return sourceKind === 'hydrated-context'
+    || inputTrust === 'untrusted-context'
+    || jdText.startsWith('Contexto del informe seleccionado:');
+}
+
+function validateAutoPipelineInput(body = {}) {
+  const sourceUrl = String(body.url || '').trim();
+  const originalJdText = String(body.jdText || '').trim();
+  const hydratedContext = isHydratedContextInput(body);
+  const jdText = hydratedContext ? '' : originalJdText;
+  if (!sourceUrl && !jdText) {
+    throw Object.assign(new Error(
+      hydratedContext
+        ? 'El contexto hidratado no es una oferta completa. Pega una JD real o indica una URL pública.'
+        : 'Pega una descripción o indica una URL.'
+    ), { status: 400 });
+  }
+  if (jdText && !body.mock && jdText.length < 500) {
+    throw Object.assign(new Error('La descripción parece demasiado corta para ejecutar el flujo completo. Pega la JD completa o usa una URL pública.'), { status: 400 });
+  }
+  if (!body.mock && body.persistConfirmed !== true) {
+    throw Object.assign(new Error('Confirma explícitamente antes de generar reportes, PDFs, CVs y cambios en tracker.'), { status: 400 });
+  }
+  return {
+    jdText,
+    sourceUrl,
+    hydratedContext,
+    extractionTrust: jdText ? 'trusted-manual' : (hydratedContext ? 'untrusted-context' : 'untrusted'),
+  };
+}
+
 async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/health') {
     const checks = healthChecks();
@@ -1904,15 +1960,36 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/jobs/auto-pipeline') {
     const body = await parseJsonBody(req);
+    let prevalidatedInput;
+    try {
+      prevalidatedInput = validateAutoPipelineInput(body);
+    } catch (err) {
+      return json(res, err.status || 400, { error: err.message });
+    }
     const job = createInlineJob('auto-pipeline', async ({ push }) => {
       const steps = stepStates(['url-guard', 'liveness', 'jd-extraction', 'evaluation', 'tracker-merge', 'report-pdf', 'cv-pdf', 'apply-draft']);
       const before = new Set(listReports().map(report => report.id));
-      let jdText = String(body.jdText || '').trim();
-      const sourceUrl = String(body.url || '').trim();
-      let extractionTrust = jdText ? 'trusted-manual' : 'untrusted';
+      let jdText;
+      let sourceUrl;
+      let extractionTrust;
+      const input = prevalidatedInput;
+      jdText = input.jdText;
+      sourceUrl = input.sourceUrl;
+      extractionTrust = input.extractionTrust;
+      if (input.hydratedContext) {
+        push('warning', 'Se ignoró el contexto hidratado porque no es una JD completa.');
+      }
       if (sourceUrl) {
         setStep(push, steps, 'url-guard', 'running');
-        const target = requireSafeUrl(sourceUrl);
+        let target;
+        try {
+          target = requireSafeUrl(sourceUrl);
+        } catch (err) {
+          setStep(push, steps, 'url-guard', 'failed', { reason: err.message });
+          markRemainingSteps(push, steps, 'blocked', 'Falló antes de escribir archivos', 'url-guard');
+          push('artifact', JSON.stringify({ step: 'failed-before-write', wroteFiles: false, reason: err.message }));
+          throw err;
+        }
         setStep(push, steps, 'url-guard', 'completed', { url: target });
         setStep(push, steps, 'liveness', 'running');
         const live = await checkLiveness(target);
@@ -1931,7 +2008,17 @@ async function handleApi(req, res, url) {
         setStep(push, steps, 'liveness', 'partial', { reason: 'No se indicó URL' });
         setStep(push, steps, 'jd-extraction', jdText ? 'completed' : 'failed', { trust: extractionTrust });
       }
-      if (!jdText) throw new Error('Pega una descripción o indica una URL.');
+      if (!jdText) {
+        markRemainingSteps(push, steps, 'blocked', 'Falló antes de escribir archivos', 'jd-extraction');
+        push('artifact', JSON.stringify({ step: 'failed-before-write', wroteFiles: false, reason: 'No hay JD completa verificada' }));
+        throw new Error('Pega una descripción o indica una URL.');
+      }
+      if (!body.mock && jdText.length < 500) {
+        setStep(push, steps, 'jd-extraction', 'failed', { chars: jdText.length, trust: extractionTrust });
+        markRemainingSteps(push, steps, 'blocked', 'Falló antes de escribir archivos', 'jd-extraction');
+        push('artifact', JSON.stringify({ step: 'failed-before-write', wroteFiles: false, reason: 'JD demasiado corta' }));
+        throw new Error('La descripción parece demasiado corta para ejecutar el flujo completo.');
+      }
       mkdirSync(path.join(ROOT, 'jds'), { recursive: true });
       const name = `${new Date().toISOString().slice(0, 10)}-${slugify(body.title || sourceUrl || 'job')}-${Date.now()}.txt`;
       const rel = `jds/${name}`;

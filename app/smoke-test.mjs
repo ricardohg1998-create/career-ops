@@ -55,8 +55,58 @@ async function assertPost(path, body, check) {
   return data;
 }
 
+async function assertPatch(path, body, check) {
+  const res = await fetch(`${base}${path}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${path} returned ${res.status}`);
+  const data = await res.json();
+  if (check && !check(data)) throw new Error(`${path} returned unexpected payload`);
+  console.log(`ok ${path}`);
+  return data;
+}
+
+async function assertBadPost(path, body, expectedStatus, check) {
+  const res = await fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.status !== expectedStatus) throw new Error(`${path} returned ${res.status}, expected ${expectedStatus}`);
+  const data = await res.json();
+  if (check && !check(data)) throw new Error(`${path} returned unexpected error payload`);
+  console.log(`ok ${path} rejected ${expectedStatus}`);
+  return data;
+}
+
+async function assertBadPatch(path, body, expectedStatus, check) {
+  const res = await fetch(`${base}${path}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.status !== expectedStatus) throw new Error(`${path} returned ${res.status}, expected ${expectedStatus}`);
+  const data = await res.json();
+  if (check && !check(data)) throw new Error(`${path} returned unexpected error payload`);
+  console.log(`ok ${path} rejected ${expectedStatus}`);
+  return data;
+}
+
 function listFiles(dir) {
   return existsSync(dir) ? readdirSync(dir).sort() : [];
+}
+
+async function waitForJob(jobId, timeoutMs = 5000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const payload = await assertOk('/api/jobs', data => Array.isArray(data.jobs));
+    const job = payload.jobs.find(item => item.id === jobId);
+    if (job && job.status !== 'running') return job;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error(`Job ${jobId} did not finish in time`);
 }
 
 function commandText(args) {
@@ -136,6 +186,13 @@ try {
   await assertOk('/api/next-actions', data => data.ok && Array.isArray(data.actions));
   const appPayload = await assertOk('/api/applications', data => Array.isArray(data.applications) && data.metrics);
   if (appPayload.applications.length) {
+    const first = appPayload.applications[0];
+    await assertBadPatch(`/api/applications/${first.number}/status`, {
+      status: 'BogusStatus',
+    }, 400, data => /Estado/.test(data.error || ''));
+    await assertPatch(`/api/applications/${first.number}/status`, {
+      status: first.status,
+    }, data => data.ok && data.state?.label === first.status);
     await assertPost(`/api/applications/${appPayload.applications[0].number}/outcome`, {
       status: appPayload.applications[0].status,
       outcome: 'note',
@@ -160,8 +217,40 @@ try {
     feedbackType: 'score_too_high',
     decision: 'score_too_high',
   }, data => data.ok && data.proposal?.content);
-  assertIncludes(guidedLearning.proposal.content, 'Tipo de aprendizaje: score_too_high', 'guided learning type');
+    assertIncludes(guidedLearning.proposal.content, 'Tipo de aprendizaje: score_too_high', 'guided learning type');
   assertIncludes(guidedLearning.proposal.content, 'Ajuste sugerido', 'guided learning adjustment');
+
+  const jdsBefore = listFiles('jds');
+  const reportsBeforeGuard = listFiles('reports');
+  await assertBadPost('/api/jobs/auto-pipeline', {
+    title: 'Selected report context',
+    jdText: 'Contexto del informe seleccionado:\nNotas breves de tracker, no una JD completa.',
+    sourceKind: 'hydrated-context',
+    inputTrust: 'untrusted-context',
+  }, 400, data => /contexto|oferta|JD/i.test(data.error || ''));
+  assert(
+    JSON.stringify(jdsBefore) === JSON.stringify(listFiles('jds')),
+    'hydrated-context auto-pipeline guard changed jds/'
+  );
+  assert(
+    JSON.stringify(reportsBeforeGuard) === JSON.stringify(listFiles('reports')),
+    'hydrated-context auto-pipeline guard changed reports/'
+  );
+  const privateUrlJob = await assertPost('/api/jobs/auto-pipeline', {
+    url: 'http://127.0.0.1:1/private-job',
+    title: 'Private URL fixture',
+    persistConfirmed: true,
+  }, data => data.ok && data.jobId);
+  const failedPrivateUrlJob = await waitForJob(privateUrlJob.jobId);
+  assert(failedPrivateUrlJob.status === 'failed', 'private URL auto-pipeline job did not fail');
+  assert(
+    failedPrivateUrlJob.logs.some(event => event.type === 'artifact' && /"step":"url-guard"/.test(event.line) && /"status":"failed"/.test(event.line)),
+    'private URL auto-pipeline did not mark url-guard failed'
+  );
+  assert(
+    failedPrivateUrlJob.logs.some(event => event.type === 'artifact' && /"wroteFiles":false/.test(event.line)),
+    'private URL auto-pipeline did not report no-write failure'
+  );
 
   const deepResearch = await assertPost('/api/modules/deep-research', { company: 'Example', role: 'Role' }, data => data.ok && data.markdown);
   assertIncludes(deepResearch.markdown, 'Return structured findings with sources', 'deep research module');

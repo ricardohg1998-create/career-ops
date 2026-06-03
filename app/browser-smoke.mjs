@@ -41,7 +41,11 @@ async function submitModule(page, kind, expectedText, notes = [
   await form.locator('button').click();
   const output = page.locator('#module-output');
   await output.waitFor({ state: 'visible' });
-  await page.waitForFunction(() => document.querySelector('#module-output')?.textContent?.trim().length > 0);
+  await page.waitForFunction(expected => {
+    const node = document.querySelector('#module-output');
+    const text = node?.textContent || '';
+    return text.includes(expected) || (!node?.classList.contains('running') && text.trim().length > 0);
+  }, expectedText);
   const text = await output.textContent();
   assert(text.includes(expectedText), `${kind} output did not include "${expectedText}"`);
   assert(!/\b(submitted|sent application|clicked submit)\b/i.test(text), `${kind} output implies a real submission`);
@@ -117,6 +121,26 @@ try {
   assert(emptyGuardText.includes('Pega una') && emptyGuardText.includes('URL'), 'empty auto-pipeline guard text is missing');
   assert(autoPipelineRequests.length === 0, 'empty auto-pipeline click dispatched a job request');
   console.log('ok browser auto-pipeline empty-input guard');
+
+  await page.locator('[data-view="tracker"]').click();
+  await page.locator('#applications-table').waitFor();
+  const trackerRows = page.locator('#applications-table [data-select-app]');
+  if (await trackerRows.count()) {
+    await trackerRows.first().click();
+    await page.locator('[data-view="evaluate"]').click();
+    await page.locator('#evaluate-jd').waitFor();
+    const hydratedText = await page.locator('#evaluate-jd').inputValue();
+    if (hydratedText.includes('Contexto del informe seleccionado')) {
+      const requestsBeforeHydrated = autoPipelineRequests.length;
+      await page.locator('#evaluate-url').fill('');
+      await page.locator('#auto-pipeline-btn').click();
+      await page.waitForFunction(() => document.querySelector('#evaluate-log')?.textContent?.trim().length > 0);
+      const hydratedGuardText = await page.locator('#evaluate-log').textContent();
+      assert(/contexto seleccionado|oferta completa/i.test(hydratedGuardText), 'hydrated-context auto-pipeline guard text is missing');
+      assert(autoPipelineRequests.length === requestsBeforeHydrated, 'hydrated-context auto-pipeline click dispatched a job request');
+      console.log('ok browser auto-pipeline hydrated-context guard');
+    }
+  }
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base, { waitUntil: 'networkidle' });

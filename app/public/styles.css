@@ -235,6 +235,10 @@ h3 { font-size: 15px; }
 }
 
 .toast-region > * {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 12px 14px;
   border: 1px solid var(--line-dark);
   border-radius: var(--radius);
@@ -243,6 +247,20 @@ h3 { font-size: 15px; }
   box-shadow: 4px 4px 0 var(--ink);
   pointer-events: auto;
   animation: toast-slide-up .25s ease-out;
+}
+
+.toast-region > * span {
+  min-width: 0;
+}
+
+.toast-region > * button {
+  flex: 0 0 auto;
+  border: 1px solid var(--line-dark);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  padding: 5px 9px;
+  font-weight: 800;
 }
 
 .toast-region > *[data-type="ok"] { border-left: 5px solid var(--good); }
@@ -898,6 +916,40 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   font-style: normal;
   margin-top: 3px;
 }
+
+.job-timeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.job-timeline li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.job-timeline li span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.job-timeline li[data-status="completed"] span { background: var(--good); }
+.job-timeline li[data-status="failed"] span { background: var(--bad); }
+.job-timeline li[data-status="running"] span { background: var(--warn); }
+.job-timeline li[data-status="blocked"] span,
+.job-timeline li[data-status="partial"] span { background: var(--warn); }
 
 .job-artifacts {
   display: flex;

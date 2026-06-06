@@ -1711,6 +1711,38 @@ async function handleApi(req, res, url) {
     return json(res, 200, { ok: true, ...providerReadiness() });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/profile/provider-test') {
+    const body = await parseJsonBody(req);
+    const mode = String(body.mode || 'mock') === 'real' ? 'real' : 'mock';
+    const args = [
+      'opencode-eval.mjs',
+      '--no-save',
+      '--file',
+      path.join('app', 'test-fixtures', 'auto-pipeline-mock-jd.md'),
+      '--url',
+      'https://jobs.example.test/provider-readiness',
+    ];
+    if (mode === 'mock') args.splice(1, 0, '--mock');
+    const beforeReports = existsSync(path.join(ROOT, 'reports')) ? readdirSync(path.join(ROOT, 'reports')).sort() : [];
+    const additionsDir = path.join(ROOT, 'batch', 'tracker-additions');
+    const beforeAdditions = existsSync(additionsDir) ? readdirSync(additionsDir).sort() : [];
+    const result = await commandText(process.execPath, args, { timeout: JOB_TIMEOUT_MS });
+    const afterReports = existsSync(path.join(ROOT, 'reports')) ? readdirSync(path.join(ROOT, 'reports')).sort() : [];
+    const afterAdditions = existsSync(additionsDir) ? readdirSync(additionsDir).sort() : [];
+    const wroteFiles = JSON.stringify(beforeReports) !== JSON.stringify(afterReports)
+      || JSON.stringify(beforeAdditions) !== JSON.stringify(afterAdditions);
+    return json(res, result.ok && !wroteFiles ? 200 : 500, {
+      ok: result.ok && !wroteFiles,
+      mode,
+      noSave: true,
+      wroteFiles,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      error: result.error,
+      warnings: wroteFiles ? ['La prueba produjo archivos inesperados en reports/ o batch/tracker-additions/.'] : [],
+    });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/update/check') {
     const result = await scriptJson(['update-system.mjs', 'check']);
     return json(res, result.ok || result.data ? 200 : 500, { ok: Boolean(result.data), result: result.data, raw: result });

@@ -158,6 +158,7 @@
                   <label class="check"><input name="mock" type="checkbox"> Simulación</label>
                   <div class="toolbar">
                     <button class="primary-btn">Evaluar oferta</button>
+                    <button id="validate-evaluate-input" class="ghost-btn" type="button">Validar input</button>
                     <button id="auto-pipeline-btn" class="ghost-btn" type="button">Flujo completo</button>
                   </div>
                 </form>
@@ -347,6 +348,8 @@
                     <button class="ghost-btn" data-v1-action="/api/update/check" data-v1-method="GET">Comprobar actualización</button>
                     <button class="ghost-btn" data-v1-action="/api/update/preview" data-v1-method="GET">Vista previa diff</button>
                     <button class="ghost-btn" data-v1-action="/api/profile/provider-readiness" data-v1-method="GET">Proveedores</button>
+                    <button class="ghost-btn" data-v1-action="/api/profile/provider-test" data-v1-method="POST" data-v1-body='{"mode":"mock"}'>Probar evaluación mock</button>
+                    <button class="ghost-btn" data-v1-action="/api/profile/provider-test" data-v1-method="POST" data-v1-body='{"mode":"real"}'>Probar proveedor real</button>
                     <button class="ghost-btn" data-v1-action="/api/profile/language" data-v1-method="GET">Idioma</button>
                   </div>
                   <div id="update-log" class="job-log small"></div>

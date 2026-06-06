@@ -8,12 +8,30 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
    UTILITIES
    ═══════════════════════════════════════════ */
 
-function notify(message, type = 'ok') {
+function notify(message, type = 'ok', action = null) {
   const box = $('#mutation-feedback');
   if (!box) return;
   const el = document.createElement('div');
-  el.textContent = message;
   el.dataset.type = type;
+  const text = document.createElement('span');
+  text.textContent = message;
+  el.appendChild(text);
+  if (action?.label && typeof action.onClick === 'function') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = action.label;
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await action.onClick();
+      } catch (err) {
+        notify(err.message, 'error');
+      } finally {
+        el.remove();
+      }
+    });
+    el.appendChild(button);
+  }
   box.appendChild(el);
   clearTimeout(notify.timer);
   notify.timer = setTimeout(() => {
@@ -34,6 +52,35 @@ function confirmMutation({ title, files = [], detail = '' } = {}) {
   const ok = confirm(lines.join('\n'));
   if (!ok) notify('Acción cancelada. No se escribieron cambios.', 'warn');
   return ok;
+}
+
+function countLines(value = '') {
+  if (!String(value).length) return 0;
+  return String(value).split(/\r?\n/).length;
+}
+
+function summarizeTextDiff(before = '', after = '') {
+  const beforeLines = String(before || '').split(/\r?\n/);
+  const afterLines = String(after || '').split(/\r?\n/);
+  const max = Math.max(beforeLines.length, afterLines.length);
+  let changed = 0;
+  for (let i = 0; i < max; i++) {
+    if ((beforeLines[i] || '') !== (afterLines[i] || '')) changed++;
+  }
+  return [
+    'Vista previa de cambios:',
+    `- Lineas antes: ${countLines(before)}`,
+    `- Lineas despues: ${countLines(after)}`,
+    `- Lineas modificadas: ${changed}`,
+  ].join('\n');
+}
+
+function summarizeListChange(label, before = [], afterText = '') {
+  const after = String(afterText || '').split(/\r?\n|,/).map(item => item.trim()).filter(Boolean);
+  const previous = Array.isArray(before) ? before : [];
+  const added = after.filter(item => !previous.includes(item));
+  const removed = previous.filter(item => !after.includes(item));
+  return `${label}: ${previous.length} -> ${after.length}${added.length ? `, +${added.length}` : ''}${removed.length ? `, -${removed.length}` : ''}`;
 }
 
 function fatal(message) {
@@ -145,12 +192,14 @@ function setView(name) {
   state.view = resolved;
   $$('.nav-item').forEach(btn => {
     const btnView = viewAliases[btn.dataset.view] || btn.dataset.view;
-    btn.classList.toggle('active', btnView === resolved);
+    const active = btnView === resolved && !btn.classList.contains('nav-compat');
+    btn.classList.toggle('active', active);
+    if (active) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
   });
   $$('.view').forEach(view => {
     const viewId = view.id.replace('view-', '');
-    const resolvedId = viewAliases[viewId] || viewId;
-    view.classList.toggle('active', resolvedId === resolved);
+    view.classList.toggle('active', viewId === resolved);
   });
   $('#view-title').textContent = viewTitles[resolved] || resolved;
   if (resolved === 'home') state.selected = { kind: 'home', id: null };
@@ -664,6 +713,28 @@ function jobArtifacts(job = {}) {
   return [...new Set(artifacts)].slice(0, 4);
 }
 
+function jobStepTimeline(job = {}) {
+  const steps = new Map();
+  for (const event of job.logs || []) {
+    if (event.type !== 'artifact') continue;
+    try {
+      const data = JSON.parse(event.line);
+      if (data.step && data.status) steps.set(data.step, data.status);
+      if (data.steps && typeof data.steps === 'object') {
+        for (const [step, item] of Object.entries(data.steps)) {
+          steps.set(step, item?.status || item || 'completed');
+        }
+      }
+    } catch {}
+  }
+  if (!steps.size && job.status) steps.set(job.kind || job.type || 'job', job.status);
+  return [...steps.entries()].slice(-8).map(([step, status]) => ({
+    step,
+    status,
+    label: stepLabels[step] || step,
+  }));
+}
+
 function renderRecentJobs() {
   const box = $('#recent-jobs');
   if (!box) return;
@@ -676,6 +747,7 @@ function renderRecentJobs() {
   }
   box.innerHTML = jobs.map(job => {
     const artifacts = jobArtifacts(job);
+    const steps = jobStepTimeline(job);
     const lastError = [...(job.logs || [])].reverse().find(event => event.type === 'error')?.line || '';
     return `
       <article class="job-card ${escapeHtml(job.status || 'unknown')}">
@@ -684,6 +756,7 @@ function renderRecentJobs() {
           <strong>${escapeHtml(job.kind || job.type || job.id)}</strong>
           <small>${escapeHtml(formatJobDuration(job))}${job.exitCode !== null && job.exitCode !== undefined ? ` - código ${escapeHtml(job.exitCode)}` : ''}</small>
           ${lastError ? `<em>${escapeHtml(lastError)}</em>` : ''}
+          ${steps.length ? `<ol class="job-timeline" aria-label="Pasos del trabajo">${steps.map(item => `<li data-status="${escapeHtml(item.status)}"><span></span>${escapeHtml(item.label)}</li>`).join('')}</ol>` : ''}
           ${artifacts.length ? `<div class="job-artifacts">${artifacts.map(file => `<a href="/api/files?path=${encodeURIComponent(file)}" target="_blank" rel="noreferrer">${escapeHtml(file)}</a>`).join('')}</div>` : ''}
         </div>
         ${job.status === 'running' ? `<button class="danger-btn" data-cancel-job="${escapeHtml(job.id)}">Cancelar</button>` : ''}
@@ -1079,7 +1152,7 @@ function renderOutcomeJournal(app = {}) {
           </label>
           <label class="field-label">Resultado
             <select name="outcome">
-              <option value="applied">Aplicacion enviada</option>
+              <option value="applied">Aplicación enviada</option>
               <option value="discarded">Descartada por candidato</option>
               <option value="rejected">Rechazo recibido</option>
               <option value="interview">Entrevista agendada</option>
@@ -1134,7 +1207,7 @@ function renderApplicationDetail(box) {
     ${renderApplicationConsole(app)}
     ${renderOutcomeJournal(app)}
     <label class="field-label">Cambiar estado</label>
-    <select data-status-detail="${app.number}">
+    <select data-status-detail="${app.number}" aria-label="Cambiar estado de ${escapeHtml(app.company)} ${escapeHtml(app.role)}">
       ${state.states.map(s => `<option value="${escapeHtml(s.label)}" ${s.label === app.status ? 'selected' : ''}>${escapeHtml(statusLabels[s.label] || s.label)}</option>`).join('')}
     </select>
     <div class="detail-actions">
@@ -1203,17 +1276,19 @@ async function loadEditor() {
 
 async function saveEditor() {
   const value = $('#editor').value;
-  state.editorData[state.editorKey] = value;
   const fileByKey = {
     profile: 'config/profile.yml',
     cv: 'cv.md',
     profileMode: 'modes/_profile.md',
     articleDigest: 'article-digest.md',
   };
+  const previous = state.editorData[state.editorKey] || '';
   if (!confirmMutation({
     title: 'Guardar cambios del User Layer.',
     files: [fileByKey[state.editorKey] || 'modes/_profile.md / article-digest.md'],
+    detail: summarizeTextDiff(previous, value),
   })) return;
+  state.editorData[state.editorKey] = value;
   if (state.editorKey === 'profile') await api('/api/profile', { method: 'PUT', body: { content: value } });
   else if (state.editorKey === 'cv') await api('/api/cv', { method: 'PUT', body: { content: value } });
   else await api('/api/personalization', { method: 'PUT', body: state.editorData });
@@ -1260,10 +1335,24 @@ async function saveScannerStrategy(event) {
   const form = event.currentTarget;
   const enabledCompanies = {};
   $$('input[name="enabledCompany"]', form).forEach(input => { enabledCompanies[input.value] = input.checked; });
+  const strategy = state.scannerStrategy || {};
+  const currentCompanies = Object.fromEntries((strategy.companies || []).map(company => [company.name, Boolean(company.enabled)]));
+  const toggledCompanies = Object.entries(enabledCompanies)
+    .filter(([name, enabled]) => currentCompanies[name] !== enabled)
+    .map(([name, enabled]) => `${enabled ? '+' : '-'} ${name}`);
+  const detail = [
+    'Vista previa de cambios:',
+    summarizeListChange('Keywords objetivo', strategy.titleFilter?.positive, form.elements.positive.value),
+    summarizeListChange('Keywords bloqueadas', strategy.titleFilter?.negative, form.elements.negative.value),
+    summarizeListChange('Ubicaciones permitidas', strategy.locationFilter?.allow, form.elements.allowLocations.value),
+    summarizeListChange('Ubicaciones bloqueadas', strategy.locationFilter?.block, form.elements.blockLocations.value),
+    `Empresas cambiadas: ${toggledCompanies.length}`,
+    ...toggledCompanies.slice(0, 6).map(item => `- ${item}`),
+  ].join('\n');
   if (!confirmMutation({
     title: 'Guardar estrategia de escaneo.',
     files: ['portals.yml'],
-    detail: 'Actualiza keywords, ubicaciones y empresas activas del scanner.',
+    detail,
   })) return;
   state.scannerStrategy = await api('/api/scanner/strategy', {
     method: 'PUT',
@@ -1515,6 +1604,34 @@ function evaluatePayload(form) {
   body.sourceKind = jdInput?.dataset.sourceKind || (String(body.jdText || '').trim() ? 'manual-jd' : 'extracted-url');
   body.inputTrust = jdInput?.dataset.inputTrust || (String(body.jdText || '').trim() ? 'trusted-manual' : 'trusted-playwright');
   return body;
+}
+
+function evaluateInputPreview(body) {
+  const url = String(body.url || '').trim();
+  const jdText = String(body.jdText || '').trim();
+  const title = String(body.title || '').trim();
+  const lines = ['Validación de input', 'No se escribieron archivos.'];
+
+  if (!url && !jdText) {
+    return `${lines.join('\n')}\n\nEstado: no listo.\nFalta una URL pública o una descripción completa de la oferta.`;
+  }
+
+  if ((body.sourceKind === 'hydrated-context' || body.inputTrust === 'untrusted-context') && !url) {
+    return `${lines.join('\n')}\n\nEstado: bloqueado.\nEl texto procede del contexto seleccionado, no de una oferta completa. Pega una JD real o usa una URL pública.`;
+  }
+
+  if (!url && jdText.length < 500 && !body.mock) {
+    return `${lines.join('\n')}\n\nEstado: revisar antes de guardar.\nLa descripción parece corta (${jdText.length} caracteres). Puedes evaluarla, pero el flujo completo exigirá confirmación y puede ser demasiado poco fiable.`;
+  }
+
+  return [
+    ...lines,
+    '',
+    'Estado: listo para evaluar.',
+    `Fuente: ${url ? 'URL pública o verificable' : 'JD pegada manualmente'}.`,
+    'Persistencia: solo el botón "Flujo completo" puede guardar, y pedirá confirmación.',
+    title ? `Etiqueta: ${title}.` : 'Etiqueta: sin etiqueta corta.',
+  ].join('\n');
 }
 
 /* ═══════════════════════════════════════════
@@ -1772,8 +1889,18 @@ function fillEvaluateFromPipeline(id) {
 }
 
 async function updatePipeline(id, patch) {
+  const before = state.pipeline.find(row => row.id === String(id));
+  if (!before) return;
+  if (!confirmMutation({
+    title: patch.done ? 'Marcar oportunidad como hecha.' : 'Reabrir oportunidad en la cola.',
+    files: ['data/pipeline.md'],
+    detail: before.company || before.url,
+  })) return;
   await api(`/api/pipeline/${id}`, { method: 'PATCH', body: patch });
-  notify('Cola actualizada');
+  notify('Cola actualizada', 'ok', {
+    label: 'Deshacer',
+    onClick: () => restorePipelineEntry(before),
+  });
   await loadAll();
 }
 
@@ -1786,7 +1913,10 @@ async function deletePipeline(id) {
   })) return;
   await api(`/api/pipeline/${id}`, { method: 'DELETE' });
   state.selected = { kind: 'pipeline', id: null };
-  notify('Entrada eliminada de oportunidades');
+  notify('Entrada eliminada de oportunidades', 'ok', {
+    label: 'Deshacer',
+    onClick: () => reinsertPipelineEntry(item),
+  });
   await loadAll();
 }
 
@@ -1795,15 +1925,63 @@ async function updateStatus(number, status) {
   if (!confirmMutation({
     title: `Cambiar estado a ${statusLabels[status] || status}.`,
     files: ['data/applications.md'],
-    detail: app ? `#${app.number} ${app.company} - ${app.role}` : `Aplicacion #${number}`,
+    detail: app ? `#${app.number} ${app.company} - ${app.role}` : `Aplicación #${number}`,
   })) {
     renderApplications();
     renderDetail();
     return;
   }
   await api(`/api/applications/${number}/status`, { method: 'PATCH', body: { status } });
-  notify('Estado actualizado');
+  notify('Estado actualizado', 'ok', {
+    label: 'Deshacer',
+    onClick: () => restoreApplicationStatus(number, app?.status),
+  });
   await loadAll();
+}
+
+async function restorePipelineEntry(entry = {}) {
+  if (!entry.id) return;
+  await api(`/api/pipeline/${entry.id}`, {
+    method: 'PATCH',
+    body: {
+      done: Boolean(entry.done),
+      url: entry.url || '',
+      company: entry.company || '',
+      role: entry.role || '',
+    },
+  });
+  notify('Cambio de cola deshecho');
+  await loadAll();
+  selectPipeline(entry.id);
+}
+
+async function reinsertPipelineEntry(entry = {}) {
+  const result = await api('/api/pipeline', {
+    method: 'POST',
+    body: {
+      url: entry.url || entry.raw || '',
+      company: entry.company || '',
+      role: entry.role || '',
+    },
+  });
+  const restoredFromResponse = [...(result.entries || [])]
+    .reverse()
+    .find(row => row.url === entry.url && row.company === entry.company && row.role === entry.role);
+  if (entry.done && restoredFromResponse) {
+    await api(`/api/pipeline/${restoredFromResponse.id}`, { method: 'PATCH', body: { done: true } });
+  }
+  notify('Oportunidad restaurada en la cola');
+  await loadAll();
+  const restored = [...state.pipeline].reverse().find(row => row.url === entry.url && row.company === entry.company && row.role === entry.role);
+  if (restored) selectPipeline(restored.id);
+}
+
+async function restoreApplicationStatus(number, status) {
+  if (!status) return;
+  await api(`/api/applications/${number}/status`, { method: 'PATCH', body: { status } });
+  notify('Estado restaurado');
+  await loadAll();
+  selectApplication(number);
 }
 
 async function saveApplicationOutcome(form) {
@@ -1813,7 +1991,7 @@ async function saveApplicationOutcome(form) {
   if (!confirmMutation({
     title: 'Guardar decisión o aprendizaje en journal.',
     files: ['data/application-events.md', data.status ? 'data/applications.md' : ''].filter(Boolean),
-    detail: app ? `#${app.number} ${app.company} - ${app.role}` : `Aplicacion #${number}`,
+    detail: app ? `#${app.number} ${app.company} - ${app.role}` : `Aplicación #${number}`,
   })) return;
   await api(`/api/applications/${number}/outcome`, { method: 'POST', body: data });
   notify('Resultado guardado en el journal');
@@ -1899,17 +2077,19 @@ async function applyLearningFromDialog() {
   notify('Aprendizaje guardado');
 }
 
-async function runV1Action(path, method, logSelector) {
+async function runV1Action(path, method, logSelector, body = null) {
   const log = $(logSelector);
   const upperMethod = String(method || 'GET').toUpperCase();
   if (upperMethod !== 'GET' && !confirmMutation({
     title: 'Ejecutar acción persistente del sistema.',
     files: mutationFilesForAction(path),
-    detail: path,
+    detail: path.includes('/provider-test') && body?.mode === 'real'
+      ? 'Puede llamar al proveedor real configurado. Se ejecuta con --no-save y no debe escribir reports ni tracker.'
+      : path,
   })) return;
   log.textContent = 'Ejecutando...\n';
   try {
-    const result = await api(path, { method: upperMethod });
+    const result = await api(path, { method: upperMethod, body });
     if (streamReturnedJob(result, logSelector)) {
       notify(`Trabajo iniciado: ${result.jobId}`);
       return;
@@ -1940,6 +2120,9 @@ function renderSystemResult(container, result, meta = {}) {
   const facts = [];
   if ('opencode' in result) facts.push(`OpenCode: ${result.opencode ? 'listo' : 'no listo'}`);
   if ('gemini' in result) facts.push(`Gemini: ${result.gemini ? 'listo' : 'no listo'}`);
+  if (meta.path?.includes('/provider-test')) facts.push(`Prueba de proveedor: ${result.mode || 'mock'}`);
+  if ('noSave' in result) facts.push(result.noSave ? 'Ejecutado con --no-save.' : 'Puede escribir archivos.');
+  if ('wroteFiles' in result) facts.push(result.wroteFiles ? 'Se detectaron escrituras inesperadas.' : 'No se escribieron reports ni tracker.');
   if (result.available) facts.push(`Modo activo: ${result.modesDir || 'modes'}`);
   if (changes.length) facts.push(`Archivos tocados: ${changes.join(', ')}`);
   if (!changes.length && meta.method === 'GET') facts.push('No se escribieron cambios.');
@@ -1960,6 +2143,7 @@ function renderSystemResult(container, result, meta = {}) {
 }
 
 function mutationFilesForAction(path = '') {
+  if (path.includes('/provider-test')) return ['Sin escritura esperada (--no-save)'];
   if (path.includes('/integrity/merge')) return ['data/applications.md', 'batch/tracker-additions/'];
   if (path.includes('/integrity/normalize') || path.includes('/integrity/dedup')) return ['data/applications.md'];
   if (path.includes('/setup/repair')) return ['cv.md', 'config/profile.yml', 'modes/_profile.md', 'portals.yml'];
@@ -2016,7 +2200,16 @@ function wireEvents() {
     }
     if (target.dataset.v1Action) {
       const log = target.dataset.v1Log || (target.dataset.v1Action.includes('/update') || target.dataset.v1Action.includes('/provider') || target.dataset.v1Action.includes('/language') ? '#update-log' : '#integrity-log');
-      await runV1Action(target.dataset.v1Action, target.dataset.v1Method || 'GET', log);
+      let body = null;
+      if (target.dataset.v1Body) {
+        try {
+          body = JSON.parse(target.dataset.v1Body);
+        } catch (err) {
+          notify(`JSON de acción inválido: ${err.message}`, 'error');
+          return;
+        }
+      }
+      await runV1Action(target.dataset.v1Action, target.dataset.v1Method || 'GET', log, body);
     }
     if (target.dataset.learningApp) {
       const app = state.applications.find(row => row.number === Number(target.dataset.learningApp));
@@ -2110,6 +2303,11 @@ function wireEvents() {
     } catch (err) {
       $('#evaluate-log').textContent = `[error] ${err.message}`;
     }
+  });
+
+  $('#validate-evaluate-input').addEventListener('click', () => {
+    const body = evaluatePayload($('#evaluate-form'));
+    $('#evaluate-log').textContent = evaluateInputPreview(body);
   });
 
   $('#auto-pipeline-btn').addEventListener('click', async () => {

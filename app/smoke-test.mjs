@@ -1,12 +1,24 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { renderCvTemplate } from './lib/cv-workspace.mjs';
 
 const port = process.env.CAREER_OPS_APP_SMOKE_PORT || '4174';
 const base = `http://127.0.0.1:${port}`;
+const mutableUserFiles = [
+  'cv.md',
+  'article-digest.md',
+  'portals.yml',
+  path.join('config', 'profile.yml'),
+  path.join('modes', '_profile.md'),
+  path.join('data', 'applications.md'),
+  path.join('data', 'pipeline.md'),
+  path.join('data', 'application-events.md'),
+  path.join('data', 'scan-schedule.json'),
+];
+const mutableSnapshot = snapshotFiles(mutableUserFiles);
 const server = spawn(process.execPath, ['app/server.mjs'], {
   stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...process.env, CAREER_OPS_APP_PORT: port },
@@ -14,6 +26,30 @@ const server = spawn(process.execPath, ['app/server.mjs'], {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function snapshotFiles(files) {
+  return new Map(files.map(file => [file, existsSync(file) ? readFileSync(file, 'utf-8') : null]));
+}
+
+function restoreFiles(snapshot) {
+  for (const [file, content] of snapshot) {
+    if (content === null) {
+      if (existsSync(file)) rmSync(file, { force: true });
+    } else {
+      writeFileSync(file, content, 'utf-8');
+    }
+  }
+}
+
+function assertFilesMatchSnapshot(snapshot) {
+  const changed = [];
+  for (const [file, content] of snapshot) {
+    const current = existsSync(file) ? readFileSync(file, 'utf-8') : null;
+    if (current !== content) changed.push(file);
+  }
+  assert(!changed.length, `Smoke test left user files changed: ${changed.join(', ')}`);
+  console.log('ok smoke user files unchanged');
 }
 
 function assertIncludes(value, needle, label) {
@@ -207,6 +243,7 @@ try {
   await assertOk('/api/setup/readiness', data => typeof data.ok === 'boolean' && Array.isArray(data.missing));
   await assertOk('/api/setup/data-contract', data => data.ok && Array.isArray(data.userLayer));
   await assertOk('/api/profile/provider-readiness', data => data.ok && 'opencode' in data && data.sources?.opencodeApiKey);
+  await assertPost('/api/profile/provider-test', { mode: 'mock' }, data => data.ok && data.mode === 'mock' && data.noSave && data.wroteFiles === false);
   await assertOk('/api/profile/language', data => data.ok && Array.isArray(data.available));
   await assertOk('/api/integrity/verify', data => 'ok' in data);
   const learning = await assertPost('/api/learning/proposal', { company: 'Example', role: 'Role', decision: 'skip' }, data => data.ok && data.proposal?.content);
@@ -326,6 +363,9 @@ try {
   await assertOk('/api/followups', data => 'ok' in data);
   await assertOk('/api/patterns', data => 'ok' in data);
   await assertMockAutoPipelineFixture();
+  restoreFiles(mutableSnapshot);
+  assertFilesMatchSnapshot(mutableSnapshot);
 } finally {
   server.kill();
+  restoreFiles(mutableSnapshot);
 }

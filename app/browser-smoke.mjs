@@ -75,7 +75,7 @@ try {
   await page.locator('[data-view="opportunities"]').click();
   await page.locator('#scanner-discovery').waitFor();
   const discoveryText = await page.locator('#scanner-discovery').innerText();
-  assert(discoveryText.includes('Ofertas descubiertas automaticamente'), 'scanner discovery panel is missing');
+  assert(discoveryText.includes('Ofertas descubiertas automáticamente'), 'scanner discovery panel is missing');
   console.log('ok browser scanner discovery panel');
   await page.locator('#scan-open-btn').click();
   await page.locator('#scan-schedule-card').waitFor();
@@ -89,6 +89,11 @@ try {
   const scanSummary = await page.locator('#scan-log .scan-summary').innerText();
   assert(scanSummary.includes('Escaneo simulado completado') && scanSummary.includes('No se han escrito cambios'), 'scan dry-run summary is not human-readable');
   console.log('ok browser scan visual summary');
+  await page.locator('[data-view="evaluate"]').click();
+  await page.waitForFunction(() => /scan/i.test(document.querySelector('#recent-jobs')?.textContent || ''), null, { timeout: 10000 });
+  const recentJobsText = await page.locator('#recent-jobs').innerText();
+  assert(/scan/i.test(recentJobsText), 'recent jobs panel does not show completed scan job');
+  console.log('ok browser recent jobs panel');
   await page.locator('[data-view="profile"]').click();
   await page.locator('#scanner-strategy-form').waitFor();
   assert(await page.locator('[role="tablist"] [role="tab"][aria-selected="true"]').count() === 1, 'profile tabs need one selected ARIA tab');

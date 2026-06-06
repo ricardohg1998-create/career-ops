@@ -373,7 +373,7 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
   const actions = [];
   const push = action => actions.push({
     urgency: 'soon',
-    safety: 'Revision humana antes de enviar o aplicar.',
+    safety: 'Revisión humana antes de enviar o aplicar.',
     ...action,
   });
 
@@ -382,7 +382,7 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
     push({
       id: 'jobs-running',
       type: 'monitor',
-      recommendation: 'Review',
+      recommendation: 'Revisar',
       priority: 'critical',
       urgency: 'now',
       headline: `Supervisar ${runningJobs.length} trabajo${runningJobs.length === 1 ? '' : 's'} en curso`,
@@ -401,7 +401,7 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
     push({
       id: `app-${app.number}-apply`,
       type: hasArtifacts ? 'apply-assisted' : 'decide',
-      recommendation: hasArtifacts ? 'Apply Assisted' : 'Apply',
+      recommendation: hasArtifacts ? 'Candidatura asistida' : 'Aplicar',
       priority: 'high',
       urgency: app.score >= 4.4 ? 'now' : 'soon',
       company: app.company,
@@ -411,7 +411,7 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
       headline: hasArtifacts ? `Preparar candidatura asistida para ${app.company}` : `Decidir candidatura para ${app.company}`,
       label: `${app.company} - ${app.role} (${app.scoreRaw || 'sin score'})`,
       reason: 'Score alto y estado Evaluated. Siguiente paso: revisar ajuste, generar CV/dossier y decidir si aplicar.',
-      primaryAction: hasArtifacts ? 'Abrir aplicacion asistida' : 'Revisar decision',
+      primaryAction: hasArtifacts ? 'Abrir aplicación asistida' : 'Revisar decisión',
       targetView: 'tracker',
       selectKind: 'app',
       selectId: app.number,
@@ -427,7 +427,7 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
     push({
       id: `app-${app.number}-followup`,
       type: 'follow-up',
-      recommendation: 'Follow Up',
+      recommendation: 'Seguimiento',
       priority: app.ageDays >= 14 ? 'high' : 'medium',
       urgency: app.ageDays >= 14 ? 'now' : 'soon',
       company: app.company,
@@ -469,7 +469,7 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
     push({
       id: `pipeline-${entry.id}-duplicate`,
       type: 'discard',
-      recommendation: 'Discard',
+      recommendation: 'Descartar',
       priority: 'medium',
       company: entry.company,
       role: entry.role,
@@ -486,13 +486,13 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
     push({
       id: `pipeline-${entry.id}-evaluate`,
       type: 'evaluate',
-      recommendation: 'Review',
+      recommendation: 'Revisar',
       priority: 'medium',
       company: entry.company,
       role: entry.role,
       label: entry.company || entry.sourceHost || entry.url,
       headline: `Evaluar ${entry.company || entry.sourceHost || 'oportunidad pendiente'}`,
-      reason: 'Esta oportunidad aun no tiene scoring, legitimidad ni decision recomendada.',
+      reason: 'Esta oportunidad aún no tiene scoring, legitimidad ni decisión recomendada.',
       primaryAction: 'Evaluar oferta',
       targetView: 'opportunities',
       selectKind: 'pipeline',
@@ -507,7 +507,7 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
     push({
       id: `app-${app.number}-discard`,
       type: 'discard',
-      recommendation: 'Discard',
+      recommendation: 'Descartar',
       priority: 'medium',
       urgency: 'later',
       company: app.company,
@@ -544,7 +544,7 @@ function buildNextActions({ apps = parseApplications(), pipeline = parsePipeline
     push({
       id: 'scan-new-opportunities',
       type: 'scan',
-      recommendation: 'Review',
+      recommendation: 'Revisar',
       priority: 'low',
       urgency: 'later',
       headline: 'Escanear nuevas oportunidades',
@@ -861,7 +861,7 @@ function buildScannerDiscovery({ limit = 80 } = {}) {
     const recommendedAction = state === 'pending'
       ? 'Evaluar oferta'
       : state === 'evaluated'
-        ? 'Abrir evaluacion'
+        ? 'Abrir evaluación'
         : state === 'closed'
           ? 'Ignorar cerrada'
           : state === 'no_apply_control'
@@ -1217,14 +1217,14 @@ function buildLearningProposal(body) {
   const score = String(body.score || '').trim();
   const feedbackType = String(body.feedbackType || body.template || 'general').trim();
   const futureAdjustment = String(body.futureAdjustment || '').trim() || {
-    score_too_high: 'Bajar prioridad a ofertas parecidas salvo que haya evidencia fuerte de encaje, compensacion o motivacion.',
-    would_not_apply: 'Recomendar descarte mas rapido cuando aparezcan senales similares.',
+    score_too_high: 'Bajar prioridad a ofertas parecidas salvo que haya evidencia fuerte de encaje, compensación o motivación.',
+    would_not_apply: 'Recomendar descarte más rápido cuando aparezcan señales similares.',
     missed_experience: 'Buscar y ponderar mejor esta experiencia en cv.md, _profile.md o article-digest.md antes de puntuar.',
-    voice_mismatch: 'Ajustar respuestas para sonar mas como el candidato y menos corporativas.',
+    voice_mismatch: 'Ajustar respuestas para sonar más como el candidato y menos corporativas.',
   }[feedbackType] || 'Reforzar esta preferencia en futuras evaluaciones y filtros de pipeline.';
   const recommendation = [
     `- Tipo de aprendizaje: ${feedbackType}.`,
-    `- Decision observada: ${signal} en ${company} / ${role}${score ? ` (score ${score})` : ''}.`,
+    `- Decisión observada: ${signal} en ${company} / ${role}${score ? ` (score ${score})` : ''}.`,
     reason ? `- Motivo del usuario: ${reason}` : '- Motivo del usuario: pendiente de concretar.',
     `- Ajuste sugerido: ${futureAdjustment}`,
   ].join('\n');
@@ -2117,7 +2117,7 @@ async function handleApi(req, res, url) {
         }
         push('artifact', JSON.stringify({ step: 'completed', report: report.path, reportPdf: reportPdfRel, cvPdf: pdfRel, steps }));
       } else {
-        push('warning', 'No se detecto informe nuevo tras la evaluacion.');
+        push('warning', 'No se detectó informe nuevo tras la evaluación.');
         setStep(push, steps, 'report-pdf', 'failed');
         setStep(push, steps, 'cv-pdf', 'failed');
       }

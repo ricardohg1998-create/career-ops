@@ -289,6 +289,8 @@ try {
   assertIncludes(formReader.result.markdown, 'Formulario detectado automáticamente', 'form reader auto discovery');
   assertIncludes(formReader.result.markdown, 'Plan de rellenado seguro', 'form reader safe fill plan');
   assert(formReader.result.fillPlan.safePrefill >= 1, 'form reader did not mark stable profile fields as safe prefill');
+  assert(formReader.result.fields.length >= 4, 'form reader did not return fields for UI filtering');
+  assert(formReader.result.form.submitControls.length >= 1, 'form reader did not expose submit controls for UI warning');
   assertIncludes(formReader.result.markdown, 'Why this role?', 'form reader field extraction');
   assertIncludes(formReader.result.markdown, 'Submit application', 'form reader submit detection');
 

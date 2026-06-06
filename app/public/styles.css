@@ -864,6 +864,57 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .status-badge.offer { border-color: var(--good); color: #fff; background: var(--good); }
 .status-badge.rejected { border-color: var(--bad); color: var(--bad); }
 .status-badge.discarded { border-color: var(--muted); color: var(--muted); }
+.status-badge.running { border-color: var(--warn); color: var(--warn); }
+.status-badge.completed { border-color: var(--good); color: var(--good); }
+.status-badge.failed,
+.status-badge.cancelled { border-color: var(--bad); color: var(--bad); }
+
+.recent-jobs {
+  display: grid;
+  gap: 8px;
+}
+
+.job-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.job-card strong,
+.job-card small,
+.job-card em {
+  display: block;
+}
+
+.job-card small,
+.job-card em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  margin-top: 3px;
+}
+
+.job-artifacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.job-artifacts a {
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--blue);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 
 .system-result {
   display: grid;
@@ -1195,6 +1246,33 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+}
+
+.submit-alert {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid var(--bad);
+  border-left: 5px solid var(--bad);
+  border-radius: var(--radius);
+  background: #fff6f3;
+}
+
+.submit-alert span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.fill-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.fill-filter-row .active {
+  border-color: var(--ink);
+  background: #fff;
+  box-shadow: 2px 2px 0 var(--ink);
 }
 
 .fill-plan-stat {

@@ -280,7 +280,7 @@ function renderNorthStar() {
       <div class="north-star-copy">
         <span class="action-kicker">North Star</span>
         <h2>Escanear o revisar patrones</h2>
-        <p>No hay acciones urgentes cargadas todavia.</p>
+        <p>No hay acciones urgentes cargadas todavía.</p>
       </div>
       <button class="primary-btn" data-jump="opportunities">Escanear</button>
     `;
@@ -293,7 +293,7 @@ function renderNorthStar() {
       <p>${escapeHtml(action.reason || '')}</p>
       <div class="action-meta">
         <span>${escapeHtml((action.priority || 'medium').toUpperCase())}</span>
-        <span>${escapeHtml(action.safety || 'Revision humana antes de enviar o aplicar.')}</span>
+        <span>${escapeHtml(action.safety || 'Revisión humana antes de enviar o aplicar.')}</span>
       </div>
     </div>
     <button class="primary-btn" ${action.targetView ? `data-jump="${escapeHtml(action.targetView)}"` : ''} ${action.selectKind === 'app' ? `data-select-app="${escapeHtml(action.selectId)}"` : ''} ${action.selectKind === 'pipeline' ? `data-select-pipeline="${escapeHtml(action.selectId)}"` : ''} ${action.openScanPanel ? 'data-open-scan-panel' : ''}>${escapeHtml(action.primaryAction || 'Abrir')}</button>
@@ -303,7 +303,7 @@ function renderNorthStar() {
 function renderNextAction(action) {
   return `
     <button class="decision-item" ${action.targetView ? `data-jump="${escapeHtml(action.targetView)}"` : ''} ${action.selectKind === 'app' ? `data-select-app="${escapeHtml(action.selectId)}"` : ''} ${action.selectKind === 'pipeline' ? `data-select-pipeline="${escapeHtml(action.selectId)}"` : ''} ${action.openScanPanel ? 'data-open-scan-panel' : ''}>
-      <span class="score-pill ${scoreClass(Number.parseFloat(action.score))}">${escapeHtml(action.score || action.recommendation || action.type || 'accion')}</span>
+      <span class="score-pill ${scoreClass(Number.parseFloat(action.score))}">${escapeHtml(action.score || action.recommendation || action.type || 'acción')}</span>
       <strong>${escapeHtml(action.headline || action.label)}</strong>
       <span>${escapeHtml([action.company, action.role].filter(Boolean).join(' - ') || action.label || '')}</span>
       <em>${escapeHtml(action.reason || '')}</em>
@@ -457,7 +457,7 @@ function discoveryStateClass(stateValue = '') {
 
 function renderDiscoveryAction(entry) {
   if (entry.pipelineId) return `<button class="ghost-btn" data-select-pipeline="${escapeHtml(entry.pipelineId)}">${escapeHtml(entry.recommendedAction || 'Abrir')}</button>`;
-  if (entry.applicationNumber) return `<button class="ghost-btn" data-select-app="${escapeHtml(entry.applicationNumber)}">Abrir evaluacion</button>`;
+  if (entry.applicationNumber) return `<button class="ghost-btn" data-select-app="${escapeHtml(entry.applicationNumber)}">Abrir evaluación</button>`;
   if (entry.state === 'missing_from_pipeline') return `<button class="ghost-btn" data-import-discovery="${escapeHtml(entry.id)}">Reimportar</button>`;
   return `<a class="ghost-btn" href="${escapeHtml(entry.url)}" target="_blank" rel="noreferrer">Abrir URL</a>`;
 }
@@ -472,7 +472,7 @@ function renderScannerDiscovery() {
     <div class="scanner-head">
       <div>
         <span class="action-kicker">Descubrimiento</span>
-        <h3>Ofertas descubiertas automaticamente</h3>
+        <h3>Ofertas descubiertas automáticamente</h3>
         <p>${escapeHtml(scanner.guidance || 'Escanea portales para importar oportunidades sin pegar cada URL.')}</p>
       </div>
       <div class="scanner-stats">
@@ -496,7 +496,7 @@ function renderScannerDiscovery() {
           </div>
           <div class="discovery-action">${renderDiscoveryAction(entry)}</div>
         </div>
-      `).join('') || '<div class="empty-state"><span class="empty-icon">◇</span><span class="empty-title">Sin historial de escaneo</span><span class="empty-subtitle">Ejecuta un escaneo para importar ofertas automaticamente.</span></div>'}
+      `).join('') || '<div class="empty-state"><span class="empty-icon">◇</span><span class="empty-title">Sin historial de escaneo</span><span class="empty-subtitle">Ejecuta un escaneo para importar ofertas automáticamente.</span></div>'}
     </div>
   `;
 }
@@ -638,6 +638,58 @@ function renderReports() {
 function renderJobsHint() {
   const running = state.jobs.filter(job => job.status === 'running');
   $('#evaluate-status').textContent = running.length ? `${running.length} trabajos activos` : '';
+  renderRecentJobs();
+}
+
+function formatJobDuration(job = {}) {
+  const start = job.startedAt ? new Date(job.startedAt).getTime() : null;
+  const end = job.endedAt ? new Date(job.endedAt).getTime() : Date.now();
+  if (!start || Number.isNaN(start) || Number.isNaN(end)) return 'Duración no disponible';
+  const seconds = Math.max(0, Math.round((end - start) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+function jobArtifacts(job = {}) {
+  const artifacts = [];
+  for (const event of job.logs || []) {
+    if (event.type !== 'artifact') continue;
+    try {
+      const data = JSON.parse(event.line);
+      for (const value of Object.values(data)) {
+        if (typeof value === 'string' && /^(reports|output|jds|interview-prep)\//.test(value)) artifacts.push(value);
+      }
+    } catch {}
+  }
+  return [...new Set(artifacts)].slice(0, 4);
+}
+
+function renderRecentJobs() {
+  const box = $('#recent-jobs');
+  if (!box) return;
+  const jobs = [...(state.jobs || [])]
+    .sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')))
+    .slice(0, 6);
+  if (!jobs.length) {
+    box.innerHTML = '<div class="empty">Sin trabajos recientes.</div>';
+    return;
+  }
+  box.innerHTML = jobs.map(job => {
+    const artifacts = jobArtifacts(job);
+    const lastError = [...(job.logs || [])].reverse().find(event => event.type === 'error')?.line || '';
+    return `
+      <article class="job-card ${escapeHtml(job.status || 'unknown')}">
+        <div>
+          <span class="status-badge ${escapeHtml(job.status || 'unknown')}">${escapeHtml(job.status || 'sin estado')}</span>
+          <strong>${escapeHtml(job.kind || job.type || job.id)}</strong>
+          <small>${escapeHtml(formatJobDuration(job))}${job.exitCode !== null && job.exitCode !== undefined ? ` - código ${escapeHtml(job.exitCode)}` : ''}</small>
+          ${lastError ? `<em>${escapeHtml(lastError)}</em>` : ''}
+          ${artifacts.length ? `<div class="job-artifacts">${artifacts.map(file => `<a href="/api/files?path=${encodeURIComponent(file)}" target="_blank" rel="noreferrer">${escapeHtml(file)}</a>`).join('')}</div>` : ''}
+        </div>
+        ${job.status === 'running' ? `<button class="danger-btn" data-cancel-job="${escapeHtml(job.id)}">Cancelar</button>` : ''}
+      </article>
+    `;
+  }).join('');
 }
 
 /* ═══════════════════════════════════════════
@@ -887,24 +939,24 @@ function renderPipelineDetail(box) {
 function renderOpportunityConsole(item = {}, live = null) {
   const verifiedLive = live?.result === 'active';
   const blocked = item.done || item.duplicateCandidate || item.evaluatedCandidate || live?.result === 'expired';
-  const recommendation = blocked ? 'Review' : (verifiedLive ? 'Evaluate' : 'Verify');
+  const recommendation = blocked ? 'Revisar' : (verifiedLive ? 'Evaluar' : 'Verificar');
   const text = blocked
-    ? 'Hay una senal que conviene resolver antes de invertir tiempo en materiales.'
+    ? 'Hay una señal que conviene resolver antes de invertir tiempo en materiales.'
     : verifiedLive
-      ? 'La oferta parece activa. El siguiente paso de mayor valor es calcular score, legitimidad y decision.'
-      : 'Primero confirma que la oferta sigue viva; despues evalua y prepara materiales solo si merece la pena.';
+      ? 'La oferta parece activa. El siguiente paso de mayor valor es calcular score, legitimidad y decisión.'
+      : 'Primero confirma que la oferta sigue viva; después evalúa y prepara materiales solo si merece la pena.';
   const readiness = [
     { label: 'Oferta localizada', ok: Boolean(item.url), detail: item.url || 'Falta URL' },
-    { label: 'Vigencia verificada', ok: verifiedLive, detail: live ? `Resultado: ${live.result}` : 'Pendiente de verificacion con Playwright' },
+    { label: 'Vigencia verificada', ok: verifiedLive, detail: live ? `Resultado: ${live.result}` : 'Pendiente de verificación con Playwright' },
     { label: 'Sin duplicados', ok: !item.duplicateCandidate && !item.evaluatedCandidate, detail: item.evaluatedCandidate ? 'Parece ya evaluada' : item.duplicateCandidate ? 'Posible duplicada' : 'Sin alerta de duplicado' },
-    { label: 'Score calculado', ok: false, detail: 'Pendiente de Evaluacion 360' },
-    { label: 'Revision humana', ok: false, detail: 'Pendiente antes de enviar o aplicar' },
+    { label: 'Score calculado', ok: false, detail: 'Pendiente de Evaluación 360' },
+    { label: 'Revisión humana', ok: false, detail: 'Pendiente antes de enviar o aplicar' },
   ];
   return `
     <section class="application-console opportunity-console">
       <div class="console-head">
         <span class="action-kicker">${recommendation}</span>
-        <h3>Decision de oportunidad</h3>
+        <h3>Decisión de oportunidad</h3>
         <p>${escapeHtml(text)}</p>
       </div>
       ${renderReadinessList(readiness)}
@@ -914,7 +966,7 @@ function renderOpportunityConsole(item = {}, live = null) {
         <button class="ghost-btn" data-open-assistant="form-reader" data-assistant-mode="draft">Buscar formulario</button>
         <button class="ghost-btn" data-open-assistant="apply-assistant" data-assistant-mode="draft">Preparar respuestas</button>
       </div>
-      <p class="console-guardrail">Primero se decide si merece la pena. Career-Ops puede preparar y rellenar campos seguros, pero siempre se detiene antes del envio final.</p>
+      <p class="console-guardrail">Primero se decide si merece la pena. Career-Ops puede preparar y rellenar campos seguros, pero siempre se detiene antes del envío final.</p>
     </section>
   `;
 }
@@ -944,23 +996,23 @@ function consoleItem(item = {}) {
 function recommendationFor(item = {}) {
   item = consoleItem(item);
   const score = typeof item.score === 'number' ? item.score : Number.parseFloat(item.scoreRaw || '');
-  if (item.status === 'Applied') return { label: 'Follow Up', text: 'Ya aplicada. Revisa cadencia, respuesta y siguiente seguimiento.' };
-  if (['Responded', 'Interview', 'Offer'].includes(item.status)) return { label: 'Prepare', text: 'Proceso activo. Prioriza preparacion, dossier y respuestas.' };
-  if (['Discarded', 'SKIP', 'Rejected'].includes(item.status)) return { label: 'Learn', text: 'Captura aprendizaje si hubo feedback o una decision clara.' };
-  if (Number.isFinite(score) && score < 4) return { label: 'Discard', text: 'Score bajo: recomienda descartar salvo razon estrategica fuerte.' };
-  if (Number.isFinite(score) && score >= 4) return { label: item.reportPath || item.path ? 'Apply Assisted' : 'Apply', text: 'Fit alto. Prepara materiales y revisa antes de aplicar.' };
-  return { label: 'Review', text: 'Falta evidencia para recomendar aplicacion o descarte.' };
+  if (item.status === 'Applied') return { label: 'Seguimiento', text: 'Ya aplicada. Revisa cadencia, respuesta y siguiente seguimiento.' };
+  if (['Responded', 'Interview', 'Offer'].includes(item.status)) return { label: 'Preparar', text: 'Proceso activo. Prioriza preparación, dossier y respuestas.' };
+  if (['Discarded', 'SKIP', 'Rejected'].includes(item.status)) return { label: 'Aprender', text: 'Captura aprendizaje si hubo feedback o una decisión clara.' };
+  if (Number.isFinite(score) && score < 4) return { label: 'Descartar', text: 'Score bajo: recomienda descartar salvo razón estratégica fuerte.' };
+  if (Number.isFinite(score) && score >= 4) return { label: item.reportPath || item.path ? 'Candidatura asistida' : 'Aplicar', text: 'Fit alto. Prepara materiales y revisa antes de aplicar.' };
+  return { label: 'Revisar', text: 'Falta evidencia para recomendar aplicación o descarte.' };
 }
 
 function readinessItems(item = {}) {
   item = consoleItem(item);
   const score = typeof item.score === 'number' ? item.score : Number.parseFloat(item.scoreRaw || '');
   return [
-    { label: 'Oferta localizada', ok: Boolean(item.url), detail: item.url ? 'URL disponible; se intentara detectar formulario automaticamente' : 'Falta URL de oferta o formulario' },
-    { label: 'Score calculado', ok: Number.isFinite(score), detail: item.scoreRaw || 'Pendiente de evaluacion' },
+    { label: 'Oferta localizada', ok: Boolean(item.url), detail: item.url ? 'URL disponible; se intentará detectar formulario automáticamente' : 'Falta URL de oferta o formulario' },
+    { label: 'Score calculado', ok: Number.isFinite(score), detail: item.scoreRaw || 'Pendiente de evaluación' },
     { label: 'Informe generado', ok: Boolean(item.reportPath || item.path), detail: item.reportPath || item.path || 'Genera o abre informe' },
-    { label: 'PDF listo', ok: Boolean(item.pdfPath || item.pdf), detail: item.pdfPath || item.pdf ? 'Artefacto disponible' : 'Puede generarse desde Evaluacion 360' },
-    { label: 'Revision humana', ok: false, detail: 'Pendiente antes de enviar o aplicar' },
+    { label: 'PDF listo', ok: Boolean(item.pdfPath || item.pdf), detail: item.pdfPath || item.pdf ? 'Artefacto disponible' : 'Puede generarse desde Evaluación 360' },
+    { label: 'Revisión humana', ok: false, detail: 'Pendiente antes de enviar o aplicar' },
   ];
 }
 
@@ -985,7 +1037,7 @@ function renderApplicationConsole(item = {}) {
     <section class="application-console">
       <div class="console-head">
         <span class="action-kicker">${escapeHtml(recommendation.label)}</span>
-        <h3>Application Console</h3>
+        <h3>Consola de candidatura</h3>
         <p>${escapeHtml(recommendation.text)}</p>
       </div>
       ${renderReadinessList(readinessItems(item))}
@@ -996,13 +1048,13 @@ function renderApplicationConsole(item = {}) {
         <button class="ghost-btn" data-open-assistant="deep-research" data-assistant-mode="draft">Dossier empresa</button>
         <button class="ghost-btn" data-open-assistant="interview-prep" data-assistant-mode="draft">Entrevista</button>
       </div>
-      <div class="feedback-actions" aria-label="Aprendizaje rapido">
+      <div class="feedback-actions" aria-label="Aprendizaje rápido">
         <button class="ghost-btn" data-learning-template="score_too_high">Score demasiado alto</button>
-        <button class="ghost-btn" data-learning-template="would_not_apply">No aplicaria</button>
-        <button class="ghost-btn" data-learning-template="missed_experience">Falto experiencia</button>
+        <button class="ghost-btn" data-learning-template="would_not_apply">No aplicaría</button>
+        <button class="ghost-btn" data-learning-template="missed_experience">Faltó experiencia</button>
         <button class="ghost-btn" data-learning-template="voice_mismatch">No suena a mi</button>
       </div>
-      <p class="console-guardrail">Career-Ops prepara respuestas con tu voz personal calibrada y puede buscar formularios desde la URL de la oferta. El envio final siempre queda en tus manos.</p>
+      <p class="console-guardrail">Career-Ops prepara respuestas con tu voz personal calibrada y puede buscar formularios desde la URL de la oferta. El envío final siempre queda en tus manos.</p>
     </section>
   `;
 }
@@ -1014,9 +1066,9 @@ function renderOutcomeJournal(app = {}) {
   return `
     <section class="outcome-journal">
       <div class="console-head">
-        <span class="action-kicker">Post-apply</span>
-        <h3>Registrar decision o resultado</h3>
-        <p>Guarda solo lo que hayas confirmado: envio real, rechazo, entrevista, descarte, notas y proximo paso.</p>
+        <span class="action-kicker">Post-candidatura</span>
+        <h3>Registrar decisión o resultado</h3>
+        <p>Guarda solo lo que hayas confirmado: envío real, rechazo, entrevista, descarte, notas y próximo paso.</p>
       </div>
       <form class="outcome-form" data-outcome-form="${app.number}">
         <div class="outcome-grid">
@@ -1032,7 +1084,7 @@ function renderOutcomeJournal(app = {}) {
               <option value="rejected">Rechazo recibido</option>
               <option value="interview">Entrevista agendada</option>
               <option value="follow_up">Seguimiento preparado</option>
-              <option value="note">Nota de decision</option>
+              <option value="note">Nota de decisión</option>
             </select>
           </label>
           <label class="field-label">Follow-up
@@ -1040,9 +1092,9 @@ function renderOutcomeJournal(app = {}) {
           </label>
         </div>
         <textarea name="finalAnswers" rows="4" placeholder="Respuestas finales enviadas o notas del formulario. No pegues datos sensibles innecesarios."></textarea>
-        <textarea name="notes" rows="3" placeholder="Que paso, por que se tomo la decision y que debe aprender Career-Ops"></textarea>
+        <textarea name="notes" rows="3" placeholder="Qué pasó, por qué se tomó la decisión y qué debe aprender Career-Ops"></textarea>
         <div class="scan-command-row">
-          <input name="nextAction" placeholder="Siguiente accion: seguimiento, preparar entrevista, esperar respuesta...">
+          <input name="nextAction" placeholder="Siguiente acción: seguimiento, preparar entrevista, esperar respuesta...">
           <button class="primary-btn">Guardar resultado</button>
         </div>
       </form>
@@ -1053,7 +1105,7 @@ function renderOutcomeJournal(app = {}) {
             <span>${escapeHtml([event.status, event.nextAction, event.followUpDate].filter(Boolean).join(' - '))}</span>
             ${event.notes ? `<em>${escapeHtml(event.notes)}</em>` : ''}
           </div>
-        `).join('') || '<div class="empty">Sin resultados registrados todavia.</div>'}
+        `).join('') || '<div class="empty">Sin resultados registrados todavía.</div>'}
       </div>
       <p class="console-guardrail">Este registro no envia nada. Solo actualiza tu tracker y escribe en <code>data/application-events.md</code>.</p>
     </section>
@@ -1559,12 +1611,20 @@ function renderFillPlanPanel(result = {}) {
   if (!plan) return '';
   const counts = [
     { key: 'safePrefill', label: 'Prefill seguro', value: plan.safePrefill || 0 },
-    { key: 'draftForReview', label: 'Borrador revisar', value: plan.draftForReview || 0 },
+    { key: 'draftForReview', label: 'Borrador a revisar', value: plan.draftForReview || 0 },
     { key: 'reviewRequired', label: 'Sensible', value: plan.reviewRequired || 0 },
     { key: 'manualChoice', label: 'Elección manual', value: plan.manualChoice || 0 },
     { key: 'manualUpload', label: 'Subida manual', value: plan.manualUpload || 0 },
   ];
-  const fields = Array.isArray(data.fields) ? data.fields.slice(0, 8) : [];
+  const fields = Array.isArray(data.fields) ? data.fields : [];
+  const submitControls = Array.isArray(data.submitControls) ? data.submitControls : [];
+  const filters = [
+    { key: 'all', label: 'Todos' },
+    { key: 'safe', label: 'Seguros' },
+    { key: 'draft', label: 'Borradores' },
+    { key: 'sensitive', label: 'Sensibles' },
+    { key: 'upload', label: 'Subidas' },
+  ];
   return `
     <section class="fill-plan-panel" aria-label="Plan de rellenado seguro">
       <div class="fill-plan-head">
@@ -1572,6 +1632,7 @@ function renderFillPlanPanel(result = {}) {
         <h3>Qué puede hacer Career-Ops con este formulario</h3>
         <p>Puede preparar campos de bajo riesgo. Cualquier envío, dato sensible o selección ambigua queda para revisión humana.</p>
       </div>
+      ${submitControls.length ? `<div class="submit-alert"><strong>Controles de envío detectados</strong><span>${escapeHtml(submitControls.map(item => item.label || item.text || item.type || 'submit').join(', '))}</span></div>` : ''}
       <div class="fill-plan-grid">
         ${counts.map(item => `
           <div class="fill-plan-stat ${item.key}">
@@ -1581,9 +1642,12 @@ function renderFillPlanPanel(result = {}) {
         `).join('')}
       </div>
       ${fields.length ? `
+        <div class="fill-filter-row" role="group" aria-label="Filtrar campos del formulario">
+          ${filters.map((filter, index) => `<button class="ghost-btn ${index === 0 ? 'active' : ''}" type="button" data-fill-filter="${filter.key}">${filter.label}</button>`).join('')}
+        </div>
         <div class="fill-field-list">
           ${fields.map(field => `
-            <div class="fill-field-row ${escapeHtml(field.risk || 'medium')}">
+            <div class="fill-field-row ${escapeHtml(field.risk || 'medium')}" data-fill-kind="${escapeHtml(fillFieldKind(field))}">
               <span>${escapeHtml(field.fillSafe ? 'SEGURO' : field.risk === 'sensitive' ? 'REVISAR' : field.action === 'draft_for_review' ? 'BORRADOR' : 'MANUAL')}</span>
               <strong>${escapeHtml(field.label || field.name || field.type || 'Campo')}</strong>
               <em>${escapeHtml(field.fillReason || field.action || 'Pendiente de clasificar')}</em>
@@ -1597,6 +1661,14 @@ function renderFillPlanPanel(result = {}) {
       </div>
     </section>
   `;
+}
+
+function fillFieldKind(field = {}) {
+  if (field.fillSafe) return 'safe';
+  if (field.risk === 'sensitive') return 'sensitive';
+  if (field.action === 'manual_upload') return 'upload';
+  if (field.action === 'draft_for_review') return 'draft';
+  return 'manual';
 }
 
 function continueFromFormReader() {
@@ -1759,6 +1831,17 @@ async function verifyPipeline(id) {
   renderDetail();
 }
 
+async function cancelJob(id) {
+  if (!confirmMutation({
+    title: 'Cancelar trabajo en curso.',
+    files: [],
+    detail: id,
+  })) return;
+  const result = await api(`/api/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+  notify(result.ok ? 'Trabajo cancelado' : 'No se pudo cancelar el trabajo', result.ok ? 'ok' : 'warn');
+  await loadAll();
+}
+
 async function openLearning(payload) {
   const { proposal } = await api('/api/learning/proposal', { method: 'POST', body: payload });
   $('#learning-destination').value = proposal.destination || 'profileMode';
@@ -1775,22 +1858,22 @@ async function openLearningTemplate(template) {
     score_too_high: {
       decision: 'score_too_high',
       reason: 'El score/recomendacion parece demasiado optimista para mi criterio real.',
-      futureAdjustment: 'Exigir mas evidencia antes de recomendar aplicar en ofertas parecidas.',
+      futureAdjustment: 'Exigir más evidencia antes de recomendar aplicar en ofertas parecidas.',
     },
     would_not_apply: {
       decision: 'would_not_apply',
-      reason: 'Aunque pueda haber fit tecnico, no aplicaria a una oferta de este tipo.',
-      futureAdjustment: 'Priorizar descarte cuando aparezcan senales similares.',
+      reason: 'Aunque pueda haber fit técnico, no aplicaría a una oferta de este tipo.',
+      futureAdjustment: 'Priorizar descarte cuando aparezcan señales similares.',
     },
     missed_experience: {
       decision: 'missed_experience',
-      reason: 'La evaluacion no tuvo en cuenta una experiencia o prueba importante de mi perfil.',
+      reason: 'La evaluación no tuvo en cuenta una experiencia o prueba importante de mi perfil.',
       futureAdjustment: 'Buscar esta evidencia en cv.md, _profile.md o article-digest.md antes de puntuar.',
     },
     voice_mismatch: {
       decision: 'voice_mismatch',
       reason: 'El tono de las respuestas no suena suficientemente a mi forma natural de escribir.',
-      futureAdjustment: 'Ajustar los borradores para que sean mas directos, personales y menos corporativos.',
+      futureAdjustment: 'Ajustar los borradores para que sean más directos, personales y menos corporativos.',
     },
   }[template] || { decision: template, reason: '', futureAdjustment: '' };
   await openLearning({
@@ -1914,6 +1997,14 @@ function wireEvents() {
     if (target.dataset.openAssistant) openAssistant(target.dataset.openAssistant, target.dataset.assistantMode || null);
     if (target.dataset.clearModuleContext !== undefined) clearModuleContext();
     if (target.dataset.formReaderToApply !== undefined) continueFromFormReader();
+    if (target.dataset.fillFilter) {
+      const panel = target.closest('.fill-plan-panel');
+      panel?.querySelectorAll('[data-fill-filter]').forEach(button => button.classList.toggle('active', button === target));
+      panel?.querySelectorAll('[data-fill-kind]').forEach(row => {
+        row.hidden = target.dataset.fillFilter !== 'all' && row.dataset.fillKind !== target.dataset.fillFilter;
+      });
+    }
+    if (target.dataset.cancelJob) await cancelJob(target.dataset.cancelJob);
     if (target.dataset.reportPdf) {
       if (!confirmMutation({
         title: 'Generar PDF del informe.',

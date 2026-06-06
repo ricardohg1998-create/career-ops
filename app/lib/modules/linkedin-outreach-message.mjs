@@ -2,24 +2,24 @@ import { text, truncate } from './_shared.mjs';
 
 const TYPE_COPY = {
   recruiter: input => [
-    `Hi ${input.name}, I saw ${input.company} is hiring for ${input.role}.`,
-    input.proof || 'My background maps closely to the role requirements.',
-    'Happy to share my CV if this aligns.',
+    `Hola ${input.name}, he visto que ${input.company} está contratando para ${input.role}.`,
+    input.proof || 'Mi experiencia encaja bastante con los requisitos del rol.',
+    'Encantado de compartir mi CV si tiene sentido.',
   ],
   'hiring-manager': input => [
-    `Hi ${input.name}, I noticed your team is working on ${input.challenge || input.role}.`,
-    input.proof || 'I have solved similar problems in production settings.',
-    `Would love to hear how ${input.company} is approaching this.`,
+    `Hola ${input.name}, he visto que tu equipo está trabajando en ${input.challenge || input.role}.`,
+    input.proof || 'He resuelto problemas parecidos en contextos de producción.',
+    `Me encantaría saber cómo lo está abordando ${input.company}.`,
   ],
   peer: input => [
-    `Hi ${input.name}, I saw your work on ${input.topic || input.challenge || input.role}.`,
-    input.proof || 'I have been working on adjacent problems.',
-    `Would love your take on ${input.topic || 'the space'}.`,
+    `Hola ${input.name}, vi tu trabajo sobre ${input.topic || input.challenge || input.role}.`,
+    input.proof || 'He estado trabajando en problemas cercanos.',
+    `Me encantaría conocer tu visión sobre ${input.topic || 'ese espacio'}.`,
   ],
   interviewer: input => [
-    `Hi ${input.name}, I read about your work on ${input.topic || input.challenge || input.role}.`,
-    input.proof || 'It connects with work I have done recently.',
-    input.date ? `Looking forward to our conversation on ${input.date}.` : 'Looking forward to our conversation.',
+    `Hola ${input.name}, leí sobre tu trabajo en ${input.topic || input.challenge || input.role}.`,
+    input.proof || 'Conecta con trabajo que he hecho recientemente.',
+    input.date ? `Con ganas de hablar el ${input.date}.` : 'Con ganas de nuestra conversación.',
   ],
 };
 
@@ -34,9 +34,9 @@ function normalizeType(value) {
 export function createLinkedInOutreachMessage(input = {}) {
   const type = normalizeType(input.contactType || input.type);
   const data = {
-    name: text(input.contactName || input.name, 'there'),
-    company: text(input.company, 'the company'),
-    role: text(input.role, 'the role'),
+    name: text(input.contactName || input.name, 'ahí'),
+    company: text(input.company, 'la empresa'),
+    role: text(input.role, 'el rol'),
     challenge: text(input.challenge),
     proof: text(input.proof || input.proofPoint),
     topic: text(input.topic),

@@ -2,7 +2,7 @@ import { bullets, list, table, text } from './_shared.mjs';
 
 function questionText(question, index) {
   if (typeof question === 'string') return question;
-  return text(question?.question || question?.label || question?.name, `Question ${index + 1}`);
+  return text(question?.question || question?.label || question?.name, `Pregunta ${index + 1}`);
 }
 
 function answerFor(question, context) {
@@ -10,33 +10,33 @@ function answerFor(question, context) {
   const q = questionText(question, 0).toLowerCase();
   const proof = context.proofPoints[0] || context.reportSummary || context.candidateSummary;
   if (/salary|compensation|expect/i.test(q)) {
-    return context.compensation || 'I would like to calibrate against the role scope and your band for this level before naming a final number.';
+    return context.compensation || 'Prefiero calibrarlo contra el alcance del rol y vuestra banda para este nivel antes de dar una cifra final.';
   }
   if (/visa|work authorization|authori[sz]ation/i.test(q)) {
-    return context.workAuthorization || 'I can confirm the relevant work authorization details during the recruiter screen.';
+    return context.workAuthorization || 'Puedo confirmar los detalles relevantes de autorización de trabajo durante la llamada con recruiter.';
   }
   if (/why.*(company|role)|motivation|interest/i.test(q)) {
     return [
-      `I am interested in ${context.companyRole} because the role maps directly to the kind of work I want to own next.`,
-      context.jobSignal ? `The strongest signal for me is ${context.jobSignal}.` : '',
-      proof ? `I would bring relevant experience from ${proof}.` : '',
+      `Me interesa ${context.companyRole} porque el rol conecta directamente con el tipo de trabajo que quiero liderar ahora.`,
+      context.jobSignal ? `La señal más fuerte para mí es ${context.jobSignal}.` : '',
+      proof ? `Aportaría experiencia relevante de ${proof}.` : '',
     ].filter(Boolean).join(' ');
   }
   if (/cover letter/i.test(q)) {
     return [
       `Hi ${context.company} team,`,
       '',
-      `I am applying for ${context.role} because the role matches the work where I can create the most leverage: ${context.jobSignal || 'building practical systems that turn ambiguous needs into shipped outcomes'}.`,
+      `Me postulo a ${context.role} porque el rol encaja con el trabajo donde puedo crear más leverage: ${context.jobSignal || 'construir sistemas prácticos que convierten necesidades ambiguas en resultados lanzados'}.`,
       '',
-      proof ? `A relevant proof point: ${proof}.` : `My background gives me a strong base for the scope described in the posting.`,
+      proof ? `Un proof point relevante: ${proof}.` : `Mi background me da una base sólida para el alcance descrito en la oferta.`,
       '',
-      `I would be glad to discuss how I can help ${context.company} move faster with a pragmatic, production-minded approach.`,
+      `Me encantará conversar sobre cómo puedo ayudar a ${context.company} a avanzar más rápido con un enfoque pragmático y orientado a producción.`,
     ].join('\n');
   }
   return [
-    proof ? `A relevant example from my background is ${proof}.` : `My background is a good match for this requirement.`,
-    context.jobSignal ? `That connects to this role because ${context.jobSignal}.` : '',
-    'I would keep the answer grounded in the specific team needs rather than giving a generic application response.',
+    proof ? `Un ejemplo relevante de mi background es ${proof}.` : `Mi background encaja bien con este requisito.`,
+    context.jobSignal ? `Conecta con este rol porque ${context.jobSignal}.` : '',
+    'Mantendría la respuesta aterrizada a necesidades concretas del equipo, no como una respuesta genérica de candidatura.',
   ].filter(Boolean).join(' ');
 }
 
@@ -63,13 +63,13 @@ function applyPersonalVoice(answer, question, context) {
 }
 
 export function draftApplicationResponses(input = {}) {
-  const company = text(input.company, 'Company');
-  const role = text(input.role, 'Role');
+  const company = text(input.company, 'Empresa');
+  const role = text(input.role, 'Rol');
   const questions = list(input.questions);
   const context = {
     company,
     role,
-    companyRole: `${role} at ${company}`,
+    companyRole: `${role} en ${company}`,
     candidateSummary: text(input.candidateSummary || input.cv),
     reportSummary: text(input.reportSummary || input.report),
     jobSignal: text(input.jobSignal || input.roleSignal || input.jdSignal),
@@ -83,11 +83,11 @@ export function draftApplicationResponses(input = {}) {
     answer: applyPersonalVoice(answerFor(question, context), question, context),
   }));
   const markdown = [
-    `## Responses for ${company} - ${role}`,
+    `## Respuestas para ${company} - ${role}`,
     '',
-    context.writingStyle ? 'Writing style applied: personal voice from `modes/_profile.md` / writing samples. Keep answers conversational, concrete, first-person, and non-corporate.' : '',
+    context.writingStyle ? 'Estilo personal aplicado desde `modes/_profile.md` / muestras de escritura. Mantén respuestas conversacionales, concretas, en primera persona y poco corporativas.' : '',
     '',
-    input.basedOn ? `Based on: ${text(input.basedOn)}` : '',
+    input.basedOn ? `Basado en: ${text(input.basedOn)}` : '',
     '',
     ...responses.flatMap((item, index) => [
       `### ${index + 1}. ${item.question}`,
@@ -96,15 +96,15 @@ export function draftApplicationResponses(input = {}) {
     ]),
     '---',
     '',
-    'Notes:',
-    bullets(input.notes || ['Review every answer before pasting it into the form.', 'Do not submit until the candidate gives final approval.']),
+    'Notas:',
+    bullets(input.notes || ['Revisa cada respuesta antes de pegarla en el formulario.', 'No envíes nada hasta dar aprobación final.']),
   ].filter(line => line !== '').join('\n');
   return {
     company,
     role,
     responses,
     markdown,
-    summary: table(['Question', 'Draft ready'], responses.map(item => [item.question, 'Yes'])),
+    summary: table(['Pregunta', 'Borrador listo'], responses.map(item => [item.question, 'Sí'])),
   };
 }
 

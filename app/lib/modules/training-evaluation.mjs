@@ -12,40 +12,40 @@ export const TRAINING_WEIGHTS = {
 export function evaluateTraining(input = {}) {
   const training = input.training || input;
   const scored = weightedScore(training.scores || training, { ...TRAINING_WEIGHTS, ...(input.weights || {}) });
-  const verdict = scored.score >= 4.2 ? 'DO' : scored.score >= 3.5 ? 'DO WITH TIMEBOX' : 'DO NOT DO';
+  const verdict = scored.score >= 4.2 ? 'HACER' : scored.score >= 3.5 ? 'HACER CON TIMEBOX' : 'NO HACER';
   const result = {
-    title: text(training.title || training.name, 'Training'),
+    title: text(training.title || training.name, 'Formación'),
     provider: text(training.provider),
     score: scored.score,
     dimensions: scored.dimensions,
     verdict,
     recommendation: recommendation(scored.score, {
-      strong: 'High-leverage credential or skill builder',
-      yes: 'Useful if it produces visible proof',
-      maybe: 'Only with a strict timebox',
-      no: 'Use the time on a stronger signal',
+      strong: 'Credencial o aprendizaje de alto impacto',
+      yes: 'Útil si produce prueba visible',
+      maybe: 'Solo con límite de tiempo estricto',
+      no: 'Usa ese tiempo en una señal más fuerte',
     }),
     risks: Array.isArray(training.risks) ? training.risks : [],
     alternatives: Array.isArray(training.alternatives) ? training.alternatives : [],
   };
-  result.markdown = `## Training Evaluation: ${result.title}
+  result.markdown = `## Evaluación de formación: ${result.title}
 
-${result.provider ? `**Provider:** ${result.provider}\n` : ''}**Score:** ${result.score}/5
-**Verdict:** ${result.verdict}
+${result.provider ? `**Proveedor:** ${result.provider}\n` : ''}**Puntuación:** ${result.score}/5
+**Veredicto:** ${result.verdict}
 
-${table(['Dimension', 'Score'], Object.entries(result.dimensions).map(([key, value]) => [key, `${value}/5`]))}
+${table(['Dimensión', 'Puntuación'], Object.entries(result.dimensions).map(([key, value]) => [key, `${value}/5`]))}
 
-## Recommendation
+## Recomendación
 ${result.recommendation}
 
-## Risks
-${bullets(result.risks, '- No major risks captured.')}
+## Riesgos
+${bullets(result.risks, '- No se han detectado riesgos principales.')}
 
-## Better Alternatives
-${bullets(result.alternatives, '- No alternative captured.')}
+## Mejores alternativas
+${bullets(result.alternatives, '- No hay alternativa registrada.')}
 
-## Suggested Plan
-${bullets(training.plan || ['Week 1: extract the minimum useful syllabus and define one portfolio artifact.', 'Weeks 2-4: build proof while learning; stop if no demonstrable artifact emerges.'])}`;
+## Plan sugerido
+${bullets(training.plan || ['Semana 1: extraer el temario mínimo útil y definir un artefacto de portfolio.', 'Semanas 2-4: construir prueba visible mientras aprendes; parar si no aparece evidencia demostrable.'])}`;
   return result;
 }
 

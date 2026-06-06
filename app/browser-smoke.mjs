@@ -38,7 +38,7 @@ async function submitModule(page, kind, expectedText, notes = [
   await form.locator('input[name="role"]').fill('Assisted Module Role');
   await form.locator('textarea[name="notes"]').fill(notes);
   await page.locator('#module-output').evaluate(node => node.textContent = '');
-  await form.locator('button').click();
+  await form.getByRole('button', { name: 'Generar asistente' }).click();
   const output = page.locator('#module-output');
   await output.waitFor({ state: 'visible' });
   await page.waitForFunction(expected => {
@@ -83,8 +83,19 @@ try {
   assert(scheduleText.includes('Rutina de escaneo'), 'scanner schedule card is missing');
   assert(await page.locator('#scan-schedule-form input[name="frequencyDays"]').count() === 1, 'scanner schedule frequency control is missing');
   console.log('ok browser scanner schedule panel');
+  await page.locator('#scan-company').fill('Anthropic');
+  await page.locator('#scan-form').getByRole('button', { name: 'Escanear' }).click();
+  await page.locator('#scan-log .scan-summary').waitFor({ timeout: 30000 });
+  const scanSummary = await page.locator('#scan-log .scan-summary').innerText();
+  assert(scanSummary.includes('Escaneo simulado completado') && scanSummary.includes('No se han escrito cambios'), 'scan dry-run summary is not human-readable');
+  console.log('ok browser scan visual summary');
   await page.locator('[data-view="profile"]').click();
   await page.locator('#scanner-strategy-form').waitFor();
+  assert(await page.locator('[role="tablist"] [role="tab"][aria-selected="true"]').count() === 1, 'profile tabs need one selected ARIA tab');
+  await page.locator('#profile-tab-cv').click();
+  assert(await page.locator('#profile-tab-cv[aria-selected="true"]').count() === 1, 'profile tab selection ARIA did not update');
+  assert(await page.locator('#profile-editor[role="tabpanel"]:not([hidden])').count() === 1, 'profile editor tabpanel is not exposed after tab click');
+  await page.locator('#profile-tab-insights').click();
   const strategyText = await page.locator('#scanner-strategy-form').innerText();
   assert(strategyText.includes('Empresas objetivo'), 'scanner strategy form is missing company controls');
   assert(await page.locator('#scanner-companies input[name="enabledCompany"]').count() > 0, 'scanner strategy company checkboxes are missing');
@@ -103,13 +114,13 @@ try {
   assert((await page.locator('#module-form').textContent()).includes('Generar asistente'), 'assistant CTA copy is missing');
   assert(await page.locator('#module-kind option[value="form-reader"]').count() === 1, 'form-reader module option is missing');
 
-  await submitModule(page, 'apply-assistant', 'Do not submit until the candidate gives final approval.', '');
-  await submitModule(page, 'deep-research', 'Return structured findings with sources');
-  await submitModule(page, 'interview-prep', 'Prep Checklist');
+  await submitModule(page, 'apply-assistant', 'No envíes nada hasta dar aprobación final.', '');
+  await submitModule(page, 'deep-research', 'Devuelve hallazgos estructurados con fuentes');
+  await submitModule(page, 'interview-prep', 'Checklist de preparación');
   await submitModule(page, 'outreach', 'Fixture outreach');
-  await submitModule(page, 'offer-comparison', 'Offer Comparison');
-  await submitModule(page, 'training', 'Verdict');
-  await submitModule(page, 'project', 'Verdict');
+  await submitModule(page, 'offer-comparison', 'Comparativa de ofertas');
+  await submitModule(page, 'training', 'Veredicto');
+  await submitModule(page, 'project', 'Veredicto');
 
   await page.locator('[data-view="evaluate"]').click();
   await page.locator('#evaluate-url').waitFor();
@@ -124,6 +135,8 @@ try {
 
   await page.locator('[data-view="tracker"]').click();
   await page.locator('#applications-table').waitFor();
+  assert(await page.locator('#applications-table[role="grid"]').count() === 1, 'tracker needs grid role');
+  assert(await page.locator('#applications-table [role="columnheader"]').count() >= 5, 'tracker grid headers are missing');
   const trackerRows = page.locator('#applications-table [data-select-app]');
   if (await trackerRows.count()) {
     await trackerRows.first().click();
@@ -139,6 +152,13 @@ try {
       assert(/contexto seleccionado|oferta completa/i.test(hydratedGuardText), 'hydrated-context auto-pipeline guard text is missing');
       assert(autoPipelineRequests.length === requestsBeforeHydrated, 'hydrated-context auto-pipeline click dispatched a job request');
       console.log('ok browser auto-pipeline hydrated-context guard');
+      await page.locator('[data-view="dossier"]').click();
+      await page.locator('#module-context:not(.hidden)').waitFor();
+      const contextText = await page.locator('#module-context').innerText();
+      assert(contextText.includes('Limpiar contexto'), 'dossier context strip is missing clear action');
+      await page.locator('[data-clear-module-context]').click();
+      assert(await page.locator('#module-context.hidden').count() === 1, 'dossier context strip did not clear');
+      console.log('ok browser dossier context strip');
     }
   }
 
@@ -173,6 +193,13 @@ try {
     assert(isActive, `nav section "${section}" did not become active after click`);
   }
   console.log('ok browser navigation sections');
+
+  await page.locator('[data-view="system"]').click();
+  await page.locator('[data-v1-action="/api/profile/provider-readiness"]').click();
+  await page.locator('#update-log .system-result details').waitFor();
+  const systemSummary = await page.locator('#update-log .system-result').innerText();
+  assert(systemSummary.includes('Resultado') && systemSummary.includes('Detalles técnicos'), 'system action result needs human summary plus technical details');
+  console.log('ok browser system human-readable result');
 
   // Verify no visible key English words remain in the UI
   const forbiddenPhrases = [

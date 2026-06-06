@@ -14,16 +14,16 @@ export const OFFER_WEIGHTS = {
 };
 
 const LABELS = {
-  northStar: 'North Star',
-  cvMatch: 'CV match',
-  level: 'Level',
-  compensation: 'Comp',
-  growth: 'Growth',
+  northStar: 'Alineación principal',
+  cvMatch: 'Encaje CV',
+  level: 'Nivel',
+  compensation: 'Compensación',
+  growth: 'Crecimiento',
   remote: 'Remote',
-  reputation: 'Reputation',
-  techStack: 'Tech stack',
-  speed: 'Speed',
-  culture: 'Culture',
+  reputation: 'Reputación',
+  techStack: 'Stack técnico',
+  speed: 'Velocidad',
+  culture: 'Cultura',
 };
 
 export function compareOffers(input = {}) {
@@ -34,25 +34,25 @@ export function compareOffers(input = {}) {
     return {
       rank: 0,
       id: text(offer.id, String(index + 1)),
-      company: text(offer.company, 'Company'),
-      role: text(offer.role, 'Role'),
+      company: text(offer.company, 'Empresa'),
+      role: text(offer.role, 'Rol'),
       url: text(offer.url),
       score: scored.score,
       dimensions: scored.dimensions,
       recommendation: recommendation(scored.score, {
-        strong: 'Apply immediately',
-        yes: 'Worth applying',
-        maybe: 'Apply only with a specific reason',
-        no: 'Recommend against applying',
+        strong: 'Aplicar con prioridad',
+        yes: 'Merece aplicar',
+        maybe: 'Aplicar solo con una razón específica',
+        no: 'Recomiendo no aplicar',
       }),
       notes: text(offer.notes),
     };
   }).sort((a, b) => b.score - a.score).map((offer, index) => ({ ...offer, rank: index + 1 }));
 
   const markdown = [
-    '## Offer Comparison',
+    '## Comparativa de ofertas',
     '',
-    table(['Rank', 'Company', 'Role', 'Score', 'Recommendation'], rankings.map(item => [
+    table(['Ranking', 'Empresa', 'Rol', 'Puntuación', 'Recomendación'], rankings.map(item => [
       item.rank,
       item.company,
       item.role,
@@ -60,8 +60,8 @@ export function compareOffers(input = {}) {
       item.recommendation,
     ])),
     '',
-    '## Dimension Weights',
-    table(['Dimension', 'Weight'], Object.entries(weights).map(([key, value]) => [LABELS[key] || key, `${value}%`])),
+    '## Pesos por dimensión',
+    table(['Dimensión', 'Peso'], Object.entries(weights).map(([key, value]) => [LABELS[key] || key, `${value}%`])),
   ].join('\n');
 
   return { rankings, weights, markdown };

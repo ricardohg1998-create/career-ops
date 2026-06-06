@@ -865,6 +865,107 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .status-badge.rejected { border-color: var(--bad); color: var(--bad); }
 .status-badge.discarded { border-color: var(--muted); color: var(--muted); }
 
+.system-result {
+  display: grid;
+  gap: 10px;
+  white-space: normal;
+}
+
+.system-result strong {
+  color: var(--good);
+}
+
+.system-result.bad strong {
+  color: var(--bad);
+}
+
+.system-result ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.system-result details {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.system-result summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.system-result pre {
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.context-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.context-strip strong,
+.context-strip span {
+  display: block;
+}
+
+.context-strip span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.context-strip button {
+  flex: 0 0 auto;
+}
+
+.scan-summary {
+  display: grid;
+  gap: 12px;
+  white-space: normal;
+}
+
+.scan-summary > div:first-child strong,
+.scan-summary > div:first-child span {
+  display: block;
+}
+
+.scan-summary > div:first-child span {
+  color: var(--muted);
+}
+
+.scan-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.scan-metric-grid span {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  padding: 10px;
+}
+
+.scan-metric-grid strong {
+  display: block;
+  font-size: 20px;
+  color: var(--text);
+}
+
+.scan-summary details {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.scan-summary pre {
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
 /* ═══════════════════════════════════════════
    TRACKER TABLE
    ═══════════════════════════════════════════ */

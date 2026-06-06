@@ -1,65 +1,65 @@
 import { bullets, table, text } from './_shared.mjs';
 
 export function buildInterviewPrepDraft(input = {}) {
-  const company = text(input.company, 'Company');
-  const role = text(input.role, 'Role');
+  const company = text(input.company, 'Empresa');
+  const role = text(input.role, 'Rol');
   const rounds = Array.isArray(input.rounds) ? input.rounds : [];
   const stories = Array.isArray(input.stories) ? input.stories : [];
   const roundRows = rounds.length
     ? rounds.map((round, index) => [
-      text(round.name || round.type, `Round ${index + 1}`),
-      text(round.audience, 'unknown'),
-      text(round.duration, 'unknown'),
-      text(round.focus || round.evaluates, 'unknown'),
+      text(round.name || round.type, `Ronda ${index + 1}`),
+      text(round.audience, 'desconocido'),
+      text(round.duration, 'desconocido'),
+      text(round.focus || round.evaluates, 'desconocido'),
     ])
-    : [['Unknown', 'panel-mixed [inferred]', 'unknown', 'Confirm with recruiter']];
+    : [['Desconocida', 'panel mixto [inferido]', 'desconocido', 'Confirmar con recruiter']];
   const storyRows = stories.length
     ? stories.map(story => [
-      text(story.audience, 'any'),
-      text(story.question || story.topic, 'Likely prompt'),
-      text(story.title || story.story, 'Story to prepare'),
-      text(story.fit, 'partial'),
+      text(story.audience, 'cualquiera'),
+      text(story.question || story.topic, 'Pregunta probable'),
+      text(story.title || story.story, 'Historia a preparar'),
+      text(story.fit, 'parcial'),
     ])
-    : [['recruiter-screen', 'Walk me through your CV', 'Prepare a 60-90s narrative', 'gap']];
+    : [['screen recruiter', 'Cuéntame tu CV', 'Preparar narrativa de 60-90 segundos', 'gap']];
 
-  return `# Interview Prep: ${company} - ${role}
+  return `# Preparación de entrevista: ${company} - ${role}
 
-## Process Overview
-- **Rounds:** ${text(input.roundCount, rounds.length ? String(rounds.length) : 'unknown - not enough data')}
-- **Format:** ${text(input.process, 'unknown - confirm with recruiter')}
-- **Difficulty:** ${text(input.difficulty, 'unknown - not enough data')}
-- **Known quirks:** ${text(input.quirks, 'unknown - not enough data')}
-- **Sources:** ${text(input.sources, 'Add research sources before using as final prep')}
+## Resumen del proceso
+- **Rondas:** ${text(input.roundCount, rounds.length ? String(rounds.length) : 'desconocido - faltan datos')}
+- **Formato:** ${text(input.process, 'desconocido - confirmar con recruiter')}
+- **Dificultad:** ${text(input.difficulty, 'desconocida - faltan datos')}
+- **Particularidades conocidas:** ${text(input.quirks, 'desconocidas - faltan datos')}
+- **Fuentes:** ${text(input.sources, 'Añade fuentes de research antes de usarlo como preparación final')}
 
-## Audience Map
-${table(['Round', 'Audience', 'Duration', 'Primary evaluation'], roundRows)}
+## Mapa de audiencia
+${table(['Ronda', 'Audiencia', 'Duración', 'Evaluación principal'], roundRows)}
 
-## Recruiter Screen Pack
-- **Narrative:** ${text(input.narrative, 'Connect the candidate story to this role in 60-90 seconds.')}
-- **Comp:** ${text(input.compensation, 'Ask for the role band if market data or leverage is unclear.')}
-- **Location / visa / timing:** ${text(input.logistics, 'Confirm constraints cleanly and early.')}
-- **Why this company:** ${text(input.companyMotivation, 'Use one public signal from research, not generic praise.')}
+## Pack para recruiter screen
+- **Narrativa:** ${text(input.narrative, 'Conecta la historia del candidato con este rol en 60-90 segundos.')}
+- **Compensación:** ${text(input.compensation, 'Pregunta por la banda del rol si los datos de mercado o leverage no están claros.')}
+- **Ubicación / visa / timing:** ${text(input.logistics, 'Confirma restricciones de forma limpia y pronto.')}
+- **Por qué esta empresa:** ${text(input.companyMotivation, 'Usa una señal pública del research, no halagos genéricos.')}
 
-## Hiring Manager Pack
-- **Why this role, why now:** ${text(input.hmAngle, 'Tie the candidate background to a named team challenge.')}
-- **First 90 days:** ${text(input.first90, 'Discover system constraints, ship a small useful win, then scale what works.')}
-- **Questions to ask:** 
-${bullets(input.hmQuestions || ['What problem would make this hire a clear success after 90 days?', 'Where is the team currently underinvested?'])}
+## Pack para hiring manager
+- **Por qué este rol, por qué ahora:** ${text(input.hmAngle, 'Conecta el background del candidato con un reto concreto del equipo.')}
+- **Primeros 90 días:** ${text(input.first90, 'Descubrir restricciones del sistema, lanzar una mejora pequeña útil y escalar lo que funcione.')}
+- **Preguntas a hacer:**
+${bullets(input.hmQuestions || ['¿Qué problema haría que esta contratación fuera un éxito claro tras 90 días?', '¿Dónde está el equipo invirtiendo menos de lo necesario?'])}
 
-## Peer / Technical Pack
-- **Likely technical themes:**
-${bullets(input.technicalThemes || ['System design and trade-offs tied to the JD', 'Production quality, testing, observability, and operations'])}
-- **Reverse questions:**
-${bullets(input.peerQuestions || ['How does the team review design decisions?', 'What does on-call or production ownership look like?'])}
+## Pack técnico / peers
+- **Temas técnicos probables:**
+${bullets(input.technicalThemes || ['Diseño de sistemas y trade-offs ligados a la JD', 'Calidad en producción, testing, observabilidad y operaciones'])}
+- **Preguntas inversas:**
+${bullets(input.peerQuestions || ['¿Cómo revisa el equipo las decisiones de diseño?', '¿Cómo es el ownership de producción u on-call?'])}
 
-## Story Bank Mapping
-${table(['Audience', 'Likely topic', 'Best story', 'Fit'], storyRows)}
+## Mapeo de story bank
+${table(['Audiencia', 'Tema probable', 'Mejor historia', 'Encaje'], storyRows)}
 
-## Prep Checklist
-${bullets(input.checklist || ['Confirm interview loop with recruiter', 'Prepare one proof point per core requirement', 'Write down comp and logistics boundaries', 'Prepare 3 sharp questions for each audience'])}
+## Checklist de preparación
+${bullets(input.checklist || ['Confirmar el loop de entrevistas con recruiter', 'Preparar un proof point por requisito core', 'Escribir límites de compensación y logística', 'Preparar 3 preguntas buenas por audiencia'])}
 
-## Risks To Address
-${bullets(input.risks || ['No major risks captured yet. Add gaps from the evaluation report before the interview.'])}`;
+## Riesgos a abordar
+${bullets(input.risks || ['Aún no hay riesgos principales capturados. Añade gaps del informe de evaluación antes de la entrevista.'])}`;
 }
 
 export default buildInterviewPrepDraft;

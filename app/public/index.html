@@ -111,7 +111,7 @@
                   <button class="primary-btn">Escanear</button>
                 </form>
                 <section id="scan-schedule-card" class="scan-schedule-card" aria-live="polite"></section>
-                <pre id="scan-log" class="job-log"></pre>
+                <div id="scan-log" class="job-log"></div>
               </section>
               <section class="panel">
                 <div class="panel-head"><h2>Verificación de vigencia en lote</h2><span class="muted">TSV + vigencia, sin aplicación automática.</span></div>
@@ -216,6 +216,7 @@
               <section class="panel">
                 <div class="panel-head"><h2>Asistentes de candidatura</h2><span class="muted">Usan la oferta seleccionada si existe</span></div>
                 <form id="module-form" class="stack-form">
+                  <div id="module-context" class="context-strip hidden" aria-live="polite"></div>
                   <div class="form-grid">
                     <label class="sr-only" for="module-kind">Asistente</label>
                     <select id="module-kind" name="kind" aria-label="Asistente de candidatura">
@@ -270,13 +271,13 @@
             <!-- ═══ PROFILE ═══ -->
             <section id="view-profile" class="view">
               <div class="tabs" role="tablist" aria-label="Perfil y datos">
-                <button class="tab active" data-profile-tab="insights">Resumen</button>
-                <button class="tab" data-profile-tab="profile">profile.yml</button>
-                <button class="tab" data-profile-tab="cv">cv.md</button>
-                <button class="tab" data-profile-tab="profileMode">_profile.md</button>
-                <button class="tab" data-profile-tab="articleDigest">article-digest.md</button>
+                <button id="profile-tab-insights" class="tab active" role="tab" aria-selected="true" aria-controls="profile-insights" data-profile-tab="insights">Resumen</button>
+                <button id="profile-tab-profile" class="tab" role="tab" aria-selected="false" aria-controls="profile-editor" tabindex="-1" data-profile-tab="profile">profile.yml</button>
+                <button id="profile-tab-cv" class="tab" role="tab" aria-selected="false" aria-controls="profile-editor" tabindex="-1" data-profile-tab="cv">cv.md</button>
+                <button id="profile-tab-profileMode" class="tab" role="tab" aria-selected="false" aria-controls="profile-editor" tabindex="-1" data-profile-tab="profileMode">_profile.md</button>
+                <button id="profile-tab-articleDigest" class="tab" role="tab" aria-selected="false" aria-controls="profile-editor" tabindex="-1" data-profile-tab="articleDigest">article-digest.md</button>
               </div>
-              <section id="profile-insights" class="lab-pane active">
+              <section id="profile-insights" class="lab-pane active" role="tabpanel" aria-labelledby="profile-tab-insights">
                 <section class="panel">
                   <div class="panel-head"><h2>Estrategia de escaneo</h2><span class="muted">Edita <code>portals.yml</code> sin tocar YAML</span></div>
                   <form id="scanner-strategy-form" class="scanner-strategy-form">
@@ -311,7 +312,7 @@
                   </section>
                 </div>
               </section>
-              <section id="profile-editor" class="lab-pane">
+              <section id="profile-editor" class="lab-pane" role="tabpanel" aria-labelledby="profile-tab-profile" hidden>
                 <label class="sr-only" for="editor">Editor de archivo de perfil</label>
                 <textarea id="editor" class="editor" spellcheck="false" aria-label="Editor de archivo de perfil"></textarea>
                 <div class="editor-actions">
@@ -334,7 +335,7 @@
                     <button class="ghost-btn" data-v1-action="/api/integrity/merge" data-v1-method="GET">Vista previa integración</button>
                     <button class="ghost-btn" data-v1-action="/api/setup/repair" data-v1-method="POST">Reparar setup</button>
                   </div>
-                  <pre id="integrity-log" class="job-log small"></pre>
+                  <div id="integrity-log" class="job-log small"></div>
                 </section>
                 <section class="panel">
                   <div class="panel-head"><h2>Actualizaciones y entorno</h2><span class="muted">Capa de sistema protegida</span></div>
@@ -344,7 +345,7 @@
                     <button class="ghost-btn" data-v1-action="/api/profile/provider-readiness" data-v1-method="GET">Proveedores</button>
                     <button class="ghost-btn" data-v1-action="/api/profile/language" data-v1-method="GET">Idioma</button>
                   </div>
-                  <pre id="update-log" class="job-log small"></pre>
+                  <div id="update-log" class="job-log small"></div>
                 </section>
               </div>
             </section>

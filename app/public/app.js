@@ -22,6 +22,20 @@ function notify(message, type = 'ok') {
   }, 3200);
 }
 
+function confirmMutation({ title, files = [], detail = '' } = {}) {
+  const lines = [
+    title || 'Esta acción escribirá cambios locales.',
+    detail,
+    files.length ? 'Archivos afectados:' : '',
+    ...files.map(file => `- ${file}`),
+    '',
+    'Continúa solo si quieres guardar estos cambios.'
+  ].filter(Boolean);
+  const ok = confirm(lines.join('\n'));
+  if (!ok) notify('Acción cancelada. No se escribieron cambios.', 'warn');
+  return ok;
+}
+
 function fatal(message) {
   const box = $('#fatal-error');
   if (!box) return;
@@ -142,6 +156,7 @@ function setView(name) {
   if (resolved === 'home') state.selected = { kind: 'home', id: null };
   if (resolved === 'opportunities' && !state.selected.id) selectPipeline(state.pipeline.find(item => !item.done)?.id);
   if (resolved === 'tracker' && state.selected.kind !== 'app') selectApplication(state.applications[0]?.number);
+  if (resolved === 'dossier') hydrateAssistantsFromSelection();
   renderDetail();
 }
 
@@ -537,6 +552,11 @@ async function saveScannerSchedule(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = new FormData(form);
+  if (!confirmMutation({
+    title: 'Guardar rutina de escaneo.',
+    files: ['data/scan-schedule.json'],
+    detail: data.has('enabled') ? `Frecuencia: cada ${data.get('frequencyDays') || 3} dias.` : 'La rutina quedara desactivada.',
+  })) return;
   state.scannerSchedule = await api('/api/scanner/schedule', {
     method: 'PUT',
     body: {
@@ -584,17 +604,19 @@ function renderApplications() {
     if (score === 'low' && !(app.score < 4)) return false;
     return true;
   });
+  $('#applications-table').setAttribute('role', 'grid');
+  $('#applications-table').setAttribute('aria-label', 'Aplicaciones evaluadas');
   $('#applications-table').innerHTML = `
-    <div class="table-head">
-      <span>#</span><span>Empresa / rol</span><span>Puntuación</span><span>Estado</span><span>Decisión</span>
+    <div class="table-head" role="row">
+      <span role="columnheader">#</span><span role="columnheader">Empresa / rol</span><span role="columnheader">Puntuación</span><span role="columnheader">Estado</span><span role="columnheader">Decisión</span>
     </div>
     ${rows.map(app => `
-      <button class="table-row ${state.selected.kind === 'app' && String(state.selected.id) === String(app.number) ? 'selected' : ''}" data-select-app="${app.number}">
-        <span data-label="#">${app.number}</span>
-        <span data-label="Empresa / rol"><strong>${escapeHtml(app.company)}</strong><small>${escapeHtml(app.role)}</small></span>
-        <span data-label="Puntuación"><em class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</em></span>
-        <span data-label="Estado"><em class="chip">${escapeHtml(statusLabels[app.status] || app.status)}</em></span>
-        <span data-label="Decisión">${app.score < 4 ? '<em class="chip bad">descartar</em>' : '<em class="chip good">revisar</em>'}</span>
+      <button class="table-row ${state.selected.kind === 'app' && String(state.selected.id) === String(app.number) ? 'selected' : ''}" data-select-app="${app.number}" role="row" aria-label="${escapeHtml(`#${app.number} ${app.company} ${app.role}`)}">
+        <span role="gridcell" data-label="#">${app.number}</span>
+        <span role="gridcell" data-label="Empresa / rol"><strong>${escapeHtml(app.company)}</strong><small>${escapeHtml(app.role)}</small></span>
+        <span role="gridcell" data-label="Puntuación"><em class="score-pill ${scoreClass(app.score)}">${escapeHtml(app.scoreRaw || 'n/a')}</em></span>
+        <span role="gridcell" data-label="Estado"><em class="chip">${escapeHtml(statusLabels[app.status] || app.status)}</em></span>
+        <span role="gridcell" data-label="Decisión">${app.score < 4 ? '<em class="chip bad">descartar</em>' : '<em class="chip good">revisar</em>'}</span>
       </button>
     `).join('')}
   `;
@@ -729,6 +751,7 @@ function hydrateAssistantsFromSelection(kind = null, mode = null) {
   const form = $('#module-form');
   if (!form) return;
   const ctx = selectedContext();
+  renderModuleContext(ctx);
   if (!ctx.company && !ctx.role && !ctx.url && !ctx.reportId) return;
   const key = contextKey(ctx);
   const changed = form.dataset.contextKey !== key;
@@ -744,6 +767,38 @@ function hydrateAssistantsFromSelection(kind = null, mode = null) {
     ].filter(Boolean).join('\n');
   }
   form.dataset.contextKey = key;
+  renderModuleContext(ctx);
+}
+
+function renderModuleContext(ctx = selectedContext()) {
+  const box = $('#module-context');
+  if (!box) return;
+  const hasContext = Boolean(ctx.company || ctx.role || ctx.url || ctx.reportId);
+  box.classList.toggle('hidden', !hasContext);
+  if (!hasContext) {
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML = `
+    <div>
+      <strong>${escapeHtml([ctx.company, ctx.role].filter(Boolean).join(' - ') || 'Contexto seleccionado')}</strong>
+      <span>${escapeHtml([ctx.reportId ? `Report ${ctx.reportId}` : '', ctx.url || ''].filter(Boolean).join(' · '))}</span>
+    </div>
+    <button class="ghost-btn" type="button" data-clear-module-context>Limpiar contexto</button>
+  `;
+}
+
+function clearModuleContext() {
+  state.selected = { kind: 'dossier', id: null };
+  const form = $('#module-form');
+  if (form) {
+    form.dataset.contextKey = '';
+    ['company', 'role', 'url', 'formUrl', 'contactUrl', 'notes'].forEach(name => {
+      if (form.elements[name]) form.elements[name].value = '';
+    });
+  }
+  renderModuleContext({});
+  notify('Contexto del Dossier limpiado');
 }
 
 /* ═══════════════════════════════════════════
@@ -1097,6 +1152,16 @@ async function loadEditor() {
 async function saveEditor() {
   const value = $('#editor').value;
   state.editorData[state.editorKey] = value;
+  const fileByKey = {
+    profile: 'config/profile.yml',
+    cv: 'cv.md',
+    profileMode: 'modes/_profile.md',
+    articleDigest: 'article-digest.md',
+  };
+  if (!confirmMutation({
+    title: 'Guardar cambios del User Layer.',
+    files: [fileByKey[state.editorKey] || 'modes/_profile.md / article-digest.md'],
+  })) return;
   if (state.editorKey === 'profile') await api('/api/profile', { method: 'PUT', body: { content: value } });
   else if (state.editorKey === 'cv') await api('/api/cv', { method: 'PUT', body: { content: value } });
   else await api('/api/personalization', { method: 'PUT', body: state.editorData });
@@ -1143,6 +1208,11 @@ async function saveScannerStrategy(event) {
   const form = event.currentTarget;
   const enabledCompanies = {};
   $$('input[name="enabledCompany"]', form).forEach(input => { enabledCompanies[input.value] = input.checked; });
+  if (!confirmMutation({
+    title: 'Guardar estrategia de escaneo.',
+    files: ['portals.yml'],
+    detail: 'Actualiza keywords, ubicaciones y empresas activas del scanner.',
+  })) return;
   state.scannerStrategy = await api('/api/scanner/strategy', {
     method: 'PUT',
     body: {
@@ -1285,10 +1355,12 @@ function renderPatternsInsight() {
 
 function streamJob(jobId, target) {
   const log = $(target);
+  const rawLines = [];
   log.textContent = `[trabajo] ${jobId}\n`;
   const source = new EventSource(`/api/jobs/${jobId}/events`);
   source.onmessage = event => {
     const item = JSON.parse(event.data);
+    rawLines.push(`[${item.type}] ${item.line}`);
     const stepEvent = normalizeStepEvent(item);
 
     if (stepEvent) {
@@ -1299,6 +1371,7 @@ function streamJob(jobId, target) {
     log.scrollTop = log.scrollHeight;
     if (['done', 'completed', 'error'].includes(item.type)) {
       source.close();
+      if (target === '#scan-log') renderScanJobSummary(log, rawLines.join('\n'));
       notify(item.type === 'error' ? 'Trabajo finalizado con error' : 'Trabajo completado', item.type === 'error' ? 'error' : 'ok');
       loadAll().catch(console.error);
     }
@@ -1307,6 +1380,41 @@ function streamJob(jobId, target) {
     source.close();
     notify('Conexión de eventos cerrada', 'warn');
   };
+}
+
+function parseScanMetric(raw, label) {
+  const match = raw.match(new RegExp(`${label}:\\s+([0-9]+)`, 'i'));
+  return match ? Number(match[1]) : null;
+}
+
+function renderScanJobSummary(container, raw) {
+  const metrics = [
+    ['Empresas', parseScanMetric(raw, 'Companies scanned')],
+    ['Encontradas', parseScanMetric(raw, 'Total jobs found')],
+    ['Filtro título', parseScanMetric(raw, 'Filtered by title')],
+    ['Filtro ubicación', parseScanMetric(raw, 'Filtered by location')],
+    ['Duplicadas', parseScanMetric(raw, 'Duplicates')],
+    ['Añadidas', parseScanMetric(raw, 'New offers added')],
+  ].filter(([, value]) => value !== null);
+  if (!metrics.length) return;
+  const dryRun = /dry run/i.test(raw);
+  container.innerHTML = `
+    <div class="scan-summary">
+      <div>
+        <strong>${dryRun ? 'Escaneo simulado completado' : 'Escaneo completado'}</strong>
+        <span>${dryRun ? 'No se han escrito cambios.' : 'Revisa oportunidades para las ofertas añadidas.'}</span>
+      </div>
+      <div class="scan-metric-grid">
+        ${metrics.map(([label, value]) => `
+          <span><strong>${value}</strong>${escapeHtml(label)}</span>
+        `).join('')}
+      </div>
+      <details>
+        <summary>Log técnico</summary>
+        <pre>${escapeHtml(raw)}</pre>
+      </details>
+    </div>
+  `;
 }
 
 function normalizeStepEvent(item) {
@@ -1453,16 +1561,16 @@ function renderFillPlanPanel(result = {}) {
     { key: 'safePrefill', label: 'Prefill seguro', value: plan.safePrefill || 0 },
     { key: 'draftForReview', label: 'Borrador revisar', value: plan.draftForReview || 0 },
     { key: 'reviewRequired', label: 'Sensible', value: plan.reviewRequired || 0 },
-    { key: 'manualChoice', label: 'Eleccion manual', value: plan.manualChoice || 0 },
-    { key: 'manualUpload', label: 'Upload manual', value: plan.manualUpload || 0 },
+    { key: 'manualChoice', label: 'Elección manual', value: plan.manualChoice || 0 },
+    { key: 'manualUpload', label: 'Subida manual', value: plan.manualUpload || 0 },
   ];
   const fields = Array.isArray(data.fields) ? data.fields.slice(0, 8) : [];
   return `
     <section class="fill-plan-panel" aria-label="Plan de rellenado seguro">
       <div class="fill-plan-head">
-        <span class="action-kicker">Safe Fill Plan</span>
-        <h3>Que puede hacer Career-Ops con este formulario</h3>
-        <p>Puede preparar y prefillear campos de bajo riesgo. Cualquier envio, dato sensible o seleccion ambigua queda para revision humana.</p>
+        <span class="action-kicker">Plan de rellenado seguro</span>
+        <h3>Qué puede hacer Career-Ops con este formulario</h3>
+        <p>Puede preparar campos de bajo riesgo. Cualquier envío, dato sensible o selección ambigua queda para revisión humana.</p>
       </div>
       <div class="fill-plan-grid">
         ${counts.map(item => `
@@ -1476,7 +1584,7 @@ function renderFillPlanPanel(result = {}) {
         <div class="fill-field-list">
           ${fields.map(field => `
             <div class="fill-field-row ${escapeHtml(field.risk || 'medium')}">
-              <span>${escapeHtml(field.fillSafe ? 'SAFE' : field.risk === 'sensitive' ? 'REVIEW' : field.action === 'draft_for_review' ? 'DRAFT' : 'MANUAL')}</span>
+              <span>${escapeHtml(field.fillSafe ? 'SEGURO' : field.risk === 'sensitive' ? 'REVISAR' : field.action === 'draft_for_review' ? 'BORRADOR' : 'MANUAL')}</span>
               <strong>${escapeHtml(field.label || field.name || field.type || 'Campo')}</strong>
               <em>${escapeHtml(field.fillReason || field.action || 'Pendiente de clasificar')}</em>
             </div>
@@ -1599,7 +1707,11 @@ async function updatePipeline(id, patch) {
 
 async function deletePipeline(id) {
   const item = state.pipeline.find(row => row.id === String(id));
-  if (!item || !confirm(`¿Eliminar de oportunidades?\n\n${item.company || item.url}`)) return;
+  if (!item || !confirmMutation({
+    title: 'Eliminar oportunidad de la cola.',
+    files: ['data/pipeline.md'],
+    detail: item.company || item.url,
+  })) return;
   await api(`/api/pipeline/${id}`, { method: 'DELETE' });
   state.selected = { kind: 'pipeline', id: null };
   notify('Entrada eliminada de oportunidades');
@@ -1607,6 +1719,16 @@ async function deletePipeline(id) {
 }
 
 async function updateStatus(number, status) {
+  const app = state.applications.find(row => row.number === Number(number));
+  if (!confirmMutation({
+    title: `Cambiar estado a ${statusLabels[status] || status}.`,
+    files: ['data/applications.md'],
+    detail: app ? `#${app.number} ${app.company} - ${app.role}` : `Aplicacion #${number}`,
+  })) {
+    renderApplications();
+    renderDetail();
+    return;
+  }
   await api(`/api/applications/${number}/status`, { method: 'PATCH', body: { status } });
   notify('Estado actualizado');
   await loadAll();
@@ -1615,6 +1737,12 @@ async function updateStatus(number, status) {
 async function saveApplicationOutcome(form) {
   const number = form.dataset.outcomeForm;
   const data = Object.fromEntries(new FormData(form));
+  const app = state.applications.find(row => row.number === Number(number));
+  if (!confirmMutation({
+    title: 'Guardar decisión o aprendizaje en journal.',
+    files: ['data/application-events.md', data.status ? 'data/applications.md' : ''].filter(Boolean),
+    detail: app ? `#${app.number} ${app.company} - ${app.role}` : `Aplicacion #${number}`,
+  })) return;
   await api(`/api/applications/${number}/outcome`, { method: 'POST', body: data });
   notify('Resultado guardado en el journal');
   await loadAll();
@@ -1690,19 +1818,70 @@ async function applyLearningFromDialog() {
 
 async function runV1Action(path, method, logSelector) {
   const log = $(logSelector);
+  const upperMethod = String(method || 'GET').toUpperCase();
+  if (upperMethod !== 'GET' && !confirmMutation({
+    title: 'Ejecutar acción persistente del sistema.',
+    files: mutationFilesForAction(path),
+    detail: path,
+  })) return;
   log.textContent = 'Ejecutando...\n';
   try {
-    const result = await api(path, { method });
+    const result = await api(path, { method: upperMethod });
     if (streamReturnedJob(result, logSelector)) {
       notify(`Trabajo iniciado: ${result.jobId}`);
       return;
     }
-    log.textContent = JSON.stringify(result.result ?? result, null, 2);
+    renderSystemResult(log, result, { path, method: upperMethod });
     notify('Acción completada');
   } catch (err) {
     log.textContent = `[error] ${err.message}`;
     notify(err.message, 'error');
   }
+}
+
+function renderSystemResult(container, result, meta = {}) {
+  const raw = result.result ?? result;
+  const ok = result.ok ?? raw.ok ?? true;
+  const mode = result.mode === 'preview' ? 'Vista previa' : result.mode === 'apply' ? 'Aplicado' : meta.method === 'GET' ? 'Lectura' : 'Escritura';
+  const stdout = String(raw.stdout || result.stdout || '').trim();
+  const stderr = String(raw.stderr || result.stderr || '').trim();
+  const warnings = [
+    stderr,
+    ...(Array.isArray(result.warnings) ? result.warnings : []),
+    ...(Array.isArray(raw.warnings) ? raw.warnings : []),
+  ].filter(Boolean);
+  const changes = [
+    ...(Array.isArray(result.changedFiles) ? result.changedFiles : []),
+    ...(Array.isArray(raw.changedFiles) ? raw.changedFiles : []),
+  ];
+  const facts = [];
+  if ('opencode' in result) facts.push(`OpenCode: ${result.opencode ? 'listo' : 'no listo'}`);
+  if ('gemini' in result) facts.push(`Gemini: ${result.gemini ? 'listo' : 'no listo'}`);
+  if (result.available) facts.push(`Modo activo: ${result.modesDir || 'modes'}`);
+  if (changes.length) facts.push(`Archivos tocados: ${changes.join(', ')}`);
+  if (!changes.length && meta.method === 'GET') facts.push('No se escribieron cambios.');
+  if (stdout && facts.length < 4) facts.push(...stdout.split(/\r?\n/).filter(Boolean).slice(0, 3));
+
+  container.innerHTML = `
+    <div class="system-result ${ok ? 'ok' : 'bad'}">
+      <strong>${ok ? 'Resultado correcto' : 'Resultado con errores'}</strong>
+      <span>${escapeHtml(mode)} · ${escapeHtml(meta.path || '')}</span>
+      ${facts.length ? `<ul>${facts.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}
+      ${warnings.length ? `<p class="assistant-error">${escapeHtml(warnings.join('\n'))}</p>` : ''}
+      <details>
+        <summary>Detalles técnicos</summary>
+        <pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre>
+      </details>
+    </div>
+  `;
+}
+
+function mutationFilesForAction(path = '') {
+  if (path.includes('/integrity/merge')) return ['data/applications.md', 'batch/tracker-additions/'];
+  if (path.includes('/integrity/normalize') || path.includes('/integrity/dedup')) return ['data/applications.md'];
+  if (path.includes('/setup/repair')) return ['cv.md', 'config/profile.yml', 'modes/_profile.md', 'portals.yml'];
+  if (path.includes('/update/')) return ['System Layer files'];
+  return ['Archivos locales del workspace'];
 }
 
 /* ═══════════════════════════════════════════
@@ -1733,8 +1912,14 @@ function wireEvents() {
       hydrateEvaluateFromSelection();
     }
     if (target.dataset.openAssistant) openAssistant(target.dataset.openAssistant, target.dataset.assistantMode || null);
+    if (target.dataset.clearModuleContext !== undefined) clearModuleContext();
     if (target.dataset.formReaderToApply !== undefined) continueFromFormReader();
     if (target.dataset.reportPdf) {
+      if (!confirmMutation({
+        title: 'Generar PDF del informe.',
+        files: ['output/*.pdf'],
+        detail: target.dataset.reportPdf,
+      })) return;
       const result = await api('/api/jobs/report-pdf', { method: 'POST', body: { reportPath: target.dataset.reportPdf } });
       streamJob(result.jobId, '#report-log');
     }
@@ -1876,6 +2061,11 @@ function wireEvents() {
   $('#generate-report-pdf').addEventListener('click', async () => {
     const report = state.loadedReport || state.reports.find(row => row.id === $('#report-picker').value);
     if (!report) return;
+    if (!confirmMutation({
+      title: 'Generar PDF del informe.',
+      files: ['output/*.pdf'],
+      detail: report.path,
+    })) return;
     const result = await api('/api/jobs/report-pdf', { method: 'POST', body: { reportPath: report.path } });
     streamReturnedJob(result, '#report-log');
     notify(`PDF iniciado: ${result.jobId}`);
@@ -1883,6 +2073,11 @@ function wireEvents() {
   $('#generate-cv-pdf').addEventListener('click', async () => {
     const report = state.loadedReport || state.reports.find(row => row.id === $('#report-picker').value);
     try {
+      if (!confirmMutation({
+        title: 'Generar CV ATS.',
+        files: ['output/*.html', 'output/*.pdf'],
+        detail: report ? `${report.company || ''} ${report.role || ''}`.trim() : 'Borrador sin informe seleccionado',
+      })) return;
       const result = await api('/api/jobs/cv-pdf', { method: 'POST', body: { reportId: report?.id, company: report?.company } });
       streamReturnedJob(result, '#report-log');
       setArtifactLink('#cv-preview-link', result.htmlPath);
@@ -1902,6 +2097,11 @@ function wireEvents() {
     const report = state.loadedReport || state.reports.find(row => row.id === $('#report-picker').value);
     if (report?.id) body.reportId = report.id;
     try {
+      if (!confirmMutation({
+        title: 'Generar vista previa de CV.',
+        files: ['output/*.html', 'output/*.pdf'],
+        detail: body.title || report?.title || 'CV ATS',
+      })) return;
       const result = await api('/api/jobs/cv-pdf', { method: 'POST', body });
       streamReturnedJob(result, '#report-log');
       setArtifactLink('#cv-preview-link', result.htmlPath);
@@ -1974,10 +2174,19 @@ function wireEvents() {
 
   // Profile tabs
   $$('[data-profile-tab]').forEach(tab => tab.addEventListener('click', () => {
-    $$('[data-profile-tab]').forEach(t => t.classList.toggle('active', t === tab));
+    $$('[data-profile-tab]').forEach(t => {
+      t.classList.toggle('active', t === tab);
+      t.setAttribute('aria-selected', String(t === tab));
+      t.tabIndex = t === tab ? 0 : -1;
+    });
     const isInsights = tab.dataset.profileTab === 'insights';
     $('#profile-insights')?.classList.toggle('active', isInsights);
     $('#profile-editor')?.classList.toggle('active', !isInsights);
+    if ($('#profile-insights')) $('#profile-insights').hidden = !isInsights;
+    if ($('#profile-editor')) {
+      $('#profile-editor').hidden = isInsights;
+      $('#profile-editor').setAttribute('aria-labelledby', tab.id || 'profile-tab-profile');
+    }
     if (!isInsights) {
       state.editorData[state.editorKey] = $('#editor').value;
       state.editorKey = tab.dataset.profileTab;

@@ -218,18 +218,18 @@ function profileAnswerForField(field = {}, context = {}) {
 function classifyFillAction(field = {}, draft = {}) {
   const q = `${field.name || ''} ${field.question || ''} ${field.type || ''}`.toLowerCase();
   if (/file|resume|cv|upload|adjuntar|subir/.test(q)) {
-    return { action: 'manual_upload', risk: 'manual', fillSafe: false, fillReason: 'File uploads must be reviewed and selected by the user.' };
+    return { action: 'manual_upload', risk: 'manual', fillSafe: false, fillReason: 'Los archivos deben ser revisados y seleccionados por el usuario.' };
   }
   if (field.tag === 'select' || /radio|checkbox/.test(field.type || '')) {
-    return { action: 'manual_choice', risk: 'manual', fillSafe: false, fillReason: 'Choice fields can encode consent, eligibility, or legal meaning.' };
+    return { action: 'manual_choice', risk: 'manual', fillSafe: false, fillReason: 'Los campos de elección pueden implicar consentimiento, elegibilidad o significado legal.' };
   }
   if (/salary|compensation|expect|visa|authorization|sponsorship|notice|relocation|disability|gender|race|ethnicity|legal|criminal/i.test(q)) {
-    return { action: 'review_required', risk: 'sensitive', fillSafe: false, fillReason: 'Sensitive logistics or legal/HR answer. Draft only.' };
+    return { action: 'review_required', risk: 'sensitive', fillSafe: false, fillReason: 'Respuesta logística sensible o legal/RRHH. Solo borrador.' };
   }
   if (draft.source === 'config/profile.yml' && draft.confidence >= 0.9) {
-    return { action: 'safe_prefill_candidate_data', risk: 'low', fillSafe: true, fillReason: 'Stable candidate profile data; still review before submit.' };
+    return { action: 'safe_prefill_candidate_data', risk: 'low', fillSafe: true, fillReason: 'Dato estable del perfil candidato; revisar igualmente antes de enviar.' };
   }
-  return { action: 'draft_for_review', risk: 'medium', fillSafe: false, fillReason: 'Generated narrative answer should be reviewed before filling.' };
+  return { action: 'draft_for_review', risk: 'medium', fillSafe: false, fillReason: 'La respuesta narrativa generada debe revisarse antes de rellenar.' };
 }
 
 function fillPlanSummary(fields = []) {
@@ -244,19 +244,19 @@ function fillPlanSummary(fields = []) {
     manualChoice: counts.manual_choice || 0,
     manualUpload: counts.manual_upload || 0,
     counts,
-    safety: 'Safe-prefill means low-risk preparation only. The user still reviews before submit.',
+    safety: 'Rellenado seguro significa preparación de bajo riesgo. El usuario revisa antes de enviar.',
   };
 }
 
 function renderFillPlan(fields = []) {
   const plan = fillPlanSummary(fields);
   return [
-    '## Safe Fill Plan',
-    `- **Safe profile prefill:** ${plan.safePrefill}`,
-    `- **Draft for review:** ${plan.draftForReview}`,
-    `- **Sensitive review required:** ${plan.reviewRequired}`,
-    `- **Manual choices/uploads:** ${plan.manualChoice + plan.manualUpload}`,
-    '- **Boundary:** Career-Ops can prepare safe fields, but must stop before final submit/send/apply.',
+    '## Plan de rellenado seguro',
+    `- **Prefill seguro de perfil:** ${plan.safePrefill}`,
+    `- **Borradores para revisar:** ${plan.draftForReview}`,
+    `- **Revisión sensible requerida:** ${plan.reviewRequired}`,
+    `- **Elecciones/subidas manuales:** ${plan.manualChoice + plan.manualUpload}`,
+    '- **Límite:** Career-Ops puede preparar campos seguros, pero se detiene antes de enviar, mandar o aplicar.',
   ].join('\n');
 }
 
@@ -279,23 +279,23 @@ export async function runApplyAssistant(input = {}, context = {}) {
     : (questions.length ? questions : defaultQuestions).map((question, index) => ({ index, tag: 'textarea', type: 'textarea', question, required: false, options: [] }));
   const mappedFields = fields.map(field => mapField(field, context));
   const markdown = [
-    `## Apply Assistant: ${context.company || input.company || 'Company'} - ${context.role || input.role || 'Role'}`,
+    `## Asistente de candidatura: ${context.company || input.company || 'Empresa'} - ${context.role || input.role || 'Rol'}`,
     '',
-    '**Safety:** Draft/copy only. No automatic submit, send, or apply action is performed.',
-    form ? `**Form URL:** ${form.finalUrl || form.url}` : '',
-    form?.discoveredFormUrl ? `**Auto-discovered form:** ${form.discoveredFormUrl}` : '',
+    '**Seguridad:** Solo borrador/copia. No se realiza ningún envío, mensaje o aplicación automática.',
+    form ? `**URL del formulario:** ${form.finalUrl || form.url}` : '',
+    form?.discoveredFormUrl ? `**Formulario detectado automáticamente:** ${form.discoveredFormUrl}` : '',
     '',
     renderFillPlan(mappedFields),
     '',
     ...mappedFields.flatMap((field, index) => [
       `### ${index + 1}. ${field.question}`,
-      `- **Type:** ${field.tag}/${field.type}${field.required ? ' required' : ''}`,
-      `- **Fill action:** ${field.action} (${field.risk})`,
-      `- **Fill safe:** ${field.fillSafe ? 'yes' : 'no'}`,
-      `- **Why:** ${field.fillReason}`,
-      `- **Confidence:** ${field.confidence}`,
-      `- **Source:** ${field.source}`,
-      field.options?.length ? `- **Options:** ${field.options.join(', ')}` : '',
+      `- **Tipo:** ${field.tag}/${field.type}${field.required ? ' requerido' : ''}`,
+      `- **Acción de rellenado:** ${field.action} (${field.risk})`,
+      `- **Seguro para rellenar:** ${field.fillSafe ? 'sí' : 'no'}`,
+      `- **Motivo:** ${field.fillReason}`,
+      `- **Confianza:** ${field.confidence}`,
+      `- **Fuente:** ${field.source}`,
+      field.options?.length ? `- **Opciones:** ${field.options.join(', ')}` : '',
       '',
       `> ${field.answer.replace(/\n/g, '\n> ')}`,
       '',
@@ -308,7 +308,7 @@ export async function runApplyAssistant(input = {}, context = {}) {
     fields: mappedFields,
     fillPlan: fillPlanSummary(mappedFields),
     markdown,
-    warnings: ['Review every field before pasting. Career-Ops does not submit forms.'],
+    warnings: ['Revisa cada campo antes de pegarlo. Career-Ops no envía formularios.'],
     writingStyleApplied: Boolean(context.writingStyle),
   };
 }
@@ -326,33 +326,33 @@ export async function runFormReader(input = {}, context = {}) {
     return { ...field, answer: profileAnswer, source, confidence, ...classifyFillAction(field, { source, confidence, answer: profileAnswer }) };
   });
   const markdown = [
-    `## Form Reader: ${context.company || input.company || 'Company'} - ${context.role || input.role || 'Role'}`,
+    `## Lector de formulario: ${context.company || input.company || 'Empresa'} - ${context.role || input.role || 'Rol'}`,
     '',
-    '**Safety:** Read-only inspection. Career-Ops does not fill, submit, send, or apply.',
-    `**Form URL:** ${form.finalUrl || form.url}`,
-    form.discoveredFormUrl ? `**Auto-discovered form:** ${form.discoveredFormUrl}` : '',
-    form.applyLinks?.length ? `**Apply links considered:** ${form.applyLinks.map(link => link.text || link.url).join(', ')}` : '',
-    `**Status:** ${form.status || 'unknown'}`,
-    form.submitControls?.length ? `**Submit-like controls detected:** ${form.submitControls.join(', ')}` : '**Submit-like controls detected:** none',
+    '**Seguridad:** Inspección de solo lectura. Career-Ops no rellena, envía, manda ni aplica.',
+    `**URL del formulario:** ${form.finalUrl || form.url}`,
+    form.discoveredFormUrl ? `**Formulario detectado automáticamente:** ${form.discoveredFormUrl}` : '',
+    form.applyLinks?.length ? `**Enlaces de aplicación considerados:** ${form.applyLinks.map(link => link.text || link.url).join(', ')}` : '',
+    `**Estado:** ${form.status || 'desconocido'}`,
+    form.submitControls?.length ? `**Controles tipo submit detectados:** ${form.submitControls.join(', ')}` : '**Controles tipo submit detectados:** ninguno',
     '',
     renderFillPlan(plannedFields),
     '',
-    '## Fields Detected',
+    '## Campos detectados',
     plannedFields.length ? plannedFields.flatMap((field, index) => [
       `### ${index + 1}. ${field.question}`,
-      `- **Type:** ${field.tag}/${field.type}${field.required ? ' required' : ''}`,
-      field.name ? `- **Name:** ${field.name}` : '',
-      `- **Fill action:** ${field.action} (${field.risk})`,
-      `- **Fill safe:** ${field.fillSafe ? 'yes' : 'no'}`,
-      `- **Why:** ${field.fillReason}`,
-      field.options?.length ? `- **Options:** ${field.options.join(', ')}` : '',
+      `- **Tipo:** ${field.tag}/${field.type}${field.required ? ' requerido' : ''}`,
+      field.name ? `- **Nombre:** ${field.name}` : '',
+      `- **Acción de rellenado:** ${field.action} (${field.risk})`,
+      `- **Seguro para rellenar:** ${field.fillSafe ? 'sí' : 'no'}`,
+      `- **Motivo:** ${field.fillReason}`,
+      field.options?.length ? `- **Opciones:** ${field.options.join(', ')}` : '',
       '',
-    ]).filter(Boolean).join('\n') : '- No visible input, textarea, or select fields were detected.',
+    ]).filter(Boolean).join('\n') : '- No se detectaron campos visibles input, textarea o select.',
     '',
-    '## Next Safe Step',
+    '## Siguiente paso seguro',
     form.fields.length
-      ? '- Run Apply Assistant in draft mode to prepare answers for these fields, then review manually.'
-      : '- Confirm this is the actual application form or open it in a guided browser session for manual review.',
+      ? '- Ejecuta el Asistente de candidatura en modo borrador para preparar respuestas y revisarlas manualmente.'
+      : '- Confirma que este es el formulario real o ábrelo en una sesión guiada para revisión manual.',
   ].filter(Boolean).join('\n');
   return {
     ok: true,
@@ -361,7 +361,7 @@ export async function runFormReader(input = {}, context = {}) {
     fields: plannedFields,
     fillPlan: fillPlanSummary(plannedFields),
     markdown,
-    warnings: ['Read-only extraction only. Do not submit until the candidate gives final approval.'],
+    warnings: ['Extracción de solo lectura. No enviar hasta que la persona candidata dé aprobación final.'],
   };
 }
 
@@ -371,35 +371,35 @@ export async function runDeepResearch(input = {}, context = {}) {
   for (const sourceUrl of sourceUrls.slice(0, 6)) {
     sources.push(await capturePageSource(sourceUrl, { allowLocal: input.allowLocal }).catch(err => ({
       url: sourceUrl,
-      title: 'Source unavailable',
+      title: 'Fuente no disponible',
       summary: err.message,
       error: err.message,
     })));
   }
-  const company = input.company || context.company || sources[0]?.host || 'Company';
-  const role = input.role || context.role || 'Role';
+  const company = input.company || context.company || sources[0]?.host || 'Empresa';
+  const role = input.role || context.role || 'Rol';
   const prompt = buildDeepResearchPrompt({
     ...input,
     company,
     role,
-    candidateContext: context.candidateContext || 'Candidate profile stored in Career-Ops.',
+    candidateContext: context.candidateContext || 'Perfil del candidato almacenado en Career-Ops.',
     extraQuestions: [
       ...(input.extraQuestions || []),
-      'Use the captured sources below; mark everything else as uncertain.',
+      'Usa las fuentes capturadas abajo; marca todo lo demás como incierto.',
     ],
   });
   const markdown = [
-    `# Deep Research: ${company} - ${role}`,
+    `# Investigación profunda: ${company} - ${role}`,
     '',
-    '## Sources Captured',
-    sources.length ? sources.map(sourceLine).join('\n') : '- No live source URLs supplied. Research prompt generated only.',
+    '## Fuentes capturadas',
+    sources.length ? sources.map(sourceLine).join('\n') : '- No se aportaron URLs vivas. Solo se generó el prompt de investigación.',
     '',
-    '## Synthesis',
+    '## Síntesis',
     sources.length
-      ? sources.map(source => `- ${source.title || source.host}: ${source.summary || 'No summary captured.'}`).join('\n')
-      : '- No external claims verified. Treat this as a research brief, not a sourced report.',
+      ? sources.map(source => `- ${source.title || source.host}: ${source.summary || 'Sin resumen capturado.'}`).join('\n')
+      : '- No hay afirmaciones externas verificadas. Trátalo como brief de research, no como informe con fuentes.',
     '',
-    '## Assisted Research Prompt',
+    '## Prompt de investigación asistida',
     prompt,
   ].join('\n');
   return { ok: true, mode: sources.length ? 'assisted' : 'draft', sources, markdown };
@@ -412,10 +412,10 @@ export async function runInterviewPrep(input = {}, context = {}) {
     ...input,
     company: input.company || context.company,
     role: input.role || context.role,
-    sources: sources.length ? sources.map(source => source.url || source).join(', ') : 'Research sources pending or captured in Deep Research.',
+    sources: sources.length ? sources.map(source => source.url || source).join(', ') : 'Fuentes pendientes o capturadas en Investigación profunda.',
     risks: input.risks || [
-      research ? 'Review claims against captured sources before interview use.' : 'No live research attached; confirm company facts before relying on this prep.',
-      'Prepare crisp answer for any requirement not strongly evidenced in the CV.',
+      research ? 'Revisa las afirmaciones contra fuentes capturadas antes de usarlas en entrevista.' : 'No hay research vivo adjunto; confirma datos de empresa antes de apoyarte en esta preparación.',
+      'Prepara una respuesta clara para cualquier requisito que no esté fuertemente evidenciado en el CV.',
     ],
   });
   return { ok: true, mode: research || sources.length ? 'assisted' : 'draft', markdown };
@@ -426,7 +426,7 @@ export async function runOutreach(input = {}, context = {}) {
   if (input.contactUrl) {
     sources.push(await capturePageSource(input.contactUrl, { allowLocal: input.allowLocal }).catch(err => ({
       url: input.contactUrl,
-      title: 'Contact source unavailable',
+      title: 'Fuente de contacto no disponible',
       summary: err.message,
       error: err.message,
     })));
@@ -446,7 +446,7 @@ export async function runOutreach(input = {}, context = {}) {
     sources,
     result: {
       ...result,
-      safety: 'Draft only. Career-Ops never sends LinkedIn/email messages automatically.',
+      safety: 'Solo borrador. Career-Ops nunca envía mensajes de LinkedIn/email automáticamente.',
     },
   };
 }

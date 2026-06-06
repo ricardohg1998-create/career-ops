@@ -1327,14 +1327,37 @@ function dataContractSummary() {
 }
 
 function providerReadiness() {
+  const dotenv = readDotenv();
+  const env = { ...dotenv, ...process.env };
+  const opencodeKey = Boolean(env.OPENCODE_API_KEY);
+  const geminiKey = Boolean(env.GEMINI_API_KEY);
   return {
-    opencode: Boolean(process.env.OPENCODE_API_KEY),
-    gemini: Boolean(process.env.GEMINI_API_KEY),
-    model: process.env.OPENCODE_MODEL || 'deepseek-v4-pro',
+    opencode: opencodeKey,
+    gemini: geminiKey,
+    model: env.OPENCODE_MODEL || 'deepseek-v4-pro',
+    sources: {
+      opencodeApiKey: process.env.OPENCODE_API_KEY ? 'environment' : dotenv.OPENCODE_API_KEY ? '.env' : 'missing',
+      geminiApiKey: process.env.GEMINI_API_KEY ? 'environment' : dotenv.GEMINI_API_KEY ? '.env' : 'missing',
+      opencodeModel: process.env.OPENCODE_MODEL ? 'environment' : dotenv.OPENCODE_MODEL ? '.env' : 'default',
+    },
     warnings: [
-      process.env.OPENCODE_API_KEY ? '' : 'OPENCODE_API_KEY no configurada: las evaluaciones API pueden fallar o requerir --mock.',
+      opencodeKey ? '' : 'OPENCODE_API_KEY no configurada: las evaluaciones API pueden fallar o requerir --mock.',
     ].filter(Boolean),
   };
+}
+
+function readDotenv() {
+  const envPath = path.join(ROOT, '.env');
+  if (!existsSync(envPath)) return {};
+  const parsed = {};
+  for (const line of readText(envPath).split(/\r?\n/)) {
+    const clean = line.trim();
+    if (!clean || clean.startsWith('#')) continue;
+    const match = clean.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) continue;
+    parsed[match[1]] = match[2].replace(/^["']|["']$/g, '');
+  }
+  return parsed;
 }
 
 function getLanguageConfig() {
@@ -1361,59 +1384,59 @@ function buildCvHtml({ title = 'Career-Ops CV Draft', jdText = '', report = null
 function buildApplyAssistant(body) {
   const questions = String(body.questions || '').split(/\r?\n/).map(q => q.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
   const report = body.reportId ? readReportById(body.reportId) : null;
-  const company = body.company || report?.company || 'Company';
-  const role = body.role || report?.role || 'Role';
-  const base = report?.tldr || 'Use the strongest verified proof points from cv.md and the evaluation report.';
+  const company = body.company || report?.company || 'Empresa';
+  const role = body.role || report?.role || 'Rol';
+  const base = report?.tldr || 'Usa los proof points verificados más fuertes de cv.md y del informe de evaluación.';
   return {
     ok: true,
-    markdown: [`## Responses for ${company} - ${role}`, '', `Based on: ${report?.id || 'manual context'}`, ''].concat(
+    markdown: [`## Respuestas para ${company} - ${role}`, '', `Basado en: ${report?.id || 'contexto manual'}`, ''].concat(
       (questions.length ? questions : ['Why are you interested in this role?', 'Why do you want to work here?', 'Tell us about a relevant achievement.'])
-        .map((q, idx) => `### ${idx + 1}. ${q}\n> ${base} I would answer this with a specific example tied to ${role}, keeping it concise and evidence-led.`)
+        .map((q, idx) => `### ${idx + 1}. ${q}\n> ${base} Respondería con un ejemplo específico conectado con ${role}, manteniéndolo conciso y basado en evidencia.`)
     ).join('\n\n'),
   };
 }
 
 function buildDeepResearchPrompt(body) {
-  const company = body.company || 'Company';
-  const role = body.role || 'Role';
-  return { ok: true, markdown: `## Deep Research: ${company} - ${role}
+  const company = body.company || 'Empresa';
+  const role = body.role || 'Rol';
+  return { ok: true, markdown: `## Investigación profunda: ${company} - ${role}
 
-Context: I am evaluating a candidacy for ${role} at ${company}. Produce sourced, actionable interview intelligence.
+Contexto: estoy evaluando una candidatura para ${role} en ${company}. Produce inteligencia accionable para entrevista con fuentes.
 
-### 1. AI Strategy
-### 2. Recent moves (last 6 months)
-### 3. Engineering culture
-### 4. Likely challenges
-### 5. Competitors and differentiation
-### 6. Candidate angle
+### 1. Estrategia de IA
+### 2. Movimientos recientes (últimos 6 meses)
+### 3. Cultura técnica
+### 4. Retos probables
+### 5. Competidores y diferenciación
+### 6. Ángulo del candidato
 
-Use cv.md, config/profile.yml, modes/_profile.md, and article-digest.md as candidate context. Cite every factual claim.` };
+Usa cv.md, config/profile.yml, modes/_profile.md y article-digest.md como contexto del candidato. Cita cada afirmación factual.` };
 }
 
 function buildInterviewPrep(body) {
-  const company = body.company || 'Company';
-  const role = body.role || 'Role';
-  return { ok: true, markdown: `# Interview Intel: ${company} - ${role}
+  const company = body.company || 'Empresa';
+  const role = body.role || 'Rol';
+  return { ok: true, markdown: `# Inteligencia de entrevista: ${company} - ${role}
 
 **URL:** ${body.url || 'N/A'}
-**Legitimacy:** ${body.legitimacy || 'unknown'}
-**Report:** ${body.reportId || 'N/A'}
-**Researched:** ${new Date().toISOString().slice(0, 10)}
+**Legitimidad:** ${body.legitimacy || 'desconocida'}
+**Informe:** ${body.reportId || 'N/A'}
+**Investigado:** ${new Date().toISOString().slice(0, 10)}
 
-## Audience Map
-- Recruiter screen: motivation, compensation, location, timing.
-- Hiring manager: scope fit, first 90 days, ownership.
-- Peer technical: implementation depth, tradeoffs, collaboration.
+## Mapa de audiencia
+- Recruiter screen: motivación, compensación, ubicación y timing.
+- Hiring manager: encaje de scope, primeros 90 días y ownership.
+- Peer técnico: profundidad de implementación, tradeoffs y colaboración.
 
-## Story Gaps
-Review interview-prep/story-bank.md and add STAR+R stories for any missing role requirements.` };
+## Gaps de historias
+Revisa interview-prep/story-bank.md y añade historias STAR+R para requisitos del rol que falten.` };
 }
 
 function buildOutreach(body) {
-  const company = body.company || 'Company';
-  const role = body.role || 'Role';
+  const company = body.company || 'Empresa';
+  const role = body.role || 'Rol';
   const type = body.type || 'hiring-manager';
-  return { ok: true, message: `Hi - I am evaluating ${role} at ${company}. Your team seems focused on exactly the kind of applied AI/automation work I have been building. Open to a quick exchange on what matters most for this role?`.slice(0, 300), type };
+  return { ok: true, message: `Hola, estoy evaluando ${role} en ${company}. Tu equipo parece centrado justo en el tipo de trabajo de IA aplicada/automatización que he estado construyendo. ¿Te encajaría un intercambio breve sobre lo que más importa en este rol?`.slice(0, 300), type };
 }
 
 function compareOffers(body) {
@@ -1457,8 +1480,8 @@ function moduleContext(body = {}) {
   ].filter(Boolean).join('\n\n').slice(0, 9000);
   return {
     report,
-    company: body.company || report?.company || 'Company',
-    role: body.role || report?.role || 'Role',
+    company: body.company || report?.company || 'Empresa',
+    role: body.role || report?.role || 'Rol',
     reportSummary: body.reportSummary || report?.tldr || '',
     jobSignal: body.jobSignal || report?.sections?.match || report?.tldr || '',
     candidateContext: [
@@ -1482,9 +1505,9 @@ function extractMarkdownSection(markdown = '', heading = '') {
 function artifactMarkdownFor(kind, result) {
   if (result?.markdown) return result.markdown;
   if (result?.result?.message) return [
-    `# Outreach Draft`,
+    `# Borrador de outreach`,
     '',
-    `**Safety:** ${result.result.safety || 'Draft only. Do not send automatically.'}`,
+    `**Seguridad:** ${result.result.safety || 'Solo borrador. No enviar automáticamente.'}`,
     '',
     result.result.message,
   ].join('\n');
@@ -1891,15 +1914,19 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/jobs/liveness-bulk') {
     const body = await parseJsonBody(req);
-    const urls = Array.isArray(body.urls) ? body.urls : [];
+    const rawUrls = Array.isArray(body.urls) ? body.urls.map(value => String(value || '').trim()).filter(Boolean) : [];
+    const urls = rawUrls.filter(value => isSafeHttpUrl(value));
+    if (!urls.length) return json(res, 400, { error: 'No hay URLs públicas válidas para verificar.' });
     const job = createInlineJob('liveness-bulk', async ({ push }) => {
       const results = [];
+      const skipped = rawUrls.filter(value => !isSafeHttpUrl(value));
+      if (skipped.length) push('warning', `URLs omitidas por seguridad: ${skipped.length}`);
       for (const value of urls.slice(0, 100)) {
         const target = requireSafeUrl(value);
         push('progress', `Verificando ${target}`);
         results.push(await checkLiveness(target));
       }
-      push('artifact', JSON.stringify({ results }));
+      push('artifact', JSON.stringify({ results, skipped }));
     });
     return json(res, 202, { ok: true, jobId: job.id });
   }

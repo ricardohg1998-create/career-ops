@@ -80,7 +80,7 @@
             <section id="view-opportunities" class="view">
               <div class="control-row">
                 <label class="sr-only" for="pipeline-search">Buscar en oportunidades por empresa, rol o URL</label>
-                <input id="pipeline-search" type="search" placeholder="Buscar empresa, rol o URL" autocomplete="off">
+                <input id="pipeline-search" type="search" placeholder="Buscar empresa, rol, URL, portal o ubicación" autocomplete="off">
                 <label class="sr-only" for="pipeline-filter">Filtrar oportunidades</label>
                 <select id="pipeline-filter" aria-label="Filtrar oportunidades">
                   <option value="pending">Pendientes</option>
@@ -88,6 +88,22 @@
                   <option value="duplicates">Duplicadas</option>
                   <option value="evaluated">Ya evaluadas</option>
                 </select>
+                <label class="sr-only" for="pipeline-portal-filter">Filtrar por portal</label>
+                <select id="pipeline-portal-filter" aria-label="Filtrar por portal">
+                  <option value="">Todos los portales</option>
+                </select>
+                <label class="sr-only" for="pipeline-location-filter">Filtrar por ubicaciÃ³n</label>
+                <select id="pipeline-location-filter" aria-label="Filtrar por ubicaciÃ³n">
+                  <option value="">Todas las ubicaciones</option>
+                </select>
+                <label class="sr-only" for="pipeline-sort">Ordenar oportunidades</label>
+                <select id="pipeline-sort" aria-label="Ordenar oportunidades">
+                  <option value="recent">MÃ¡s recientes</option>
+                  <option value="company">Empresa A-Z</option>
+                  <option value="role">Rol A-Z</option>
+                  <option value="portal">Portal</option>
+                </select>
+                <button id="pipeline-clear-filters" class="ghost-btn" type="button">Limpiar</button>
                 <button id="scan-open-btn" class="ghost-btn" aria-controls="scan-panel" aria-expanded="false">Escanear</button>
               </div>
               <form id="pipeline-form" class="inline-form" aria-label="Añadir oferta a oportunidades">
@@ -100,6 +116,7 @@
                 <button class="primary-btn">Añadir</button>
               </form>
               <section id="scanner-discovery" class="scanner-discovery" aria-live="polite"></section>
+              <div id="pipeline-result-summary" class="result-summary" aria-live="polite"></div>
               <div id="pipeline-list" class="inbox-list"></div>
               <section id="scan-panel" class="panel hidden">
                 <div class="panel-head"><h2>Escáner de portales</h2><span class="muted">Escribe en la cola salvo simulación.</span></div>

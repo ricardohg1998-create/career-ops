@@ -456,7 +456,20 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   outline-offset: 2px;
 }
 
-.control-row input, .inline-form input { min-width: min(100%, 260px); }
+.control-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(4, minmax(150px, .72fr)) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.control-row input,
+.control-row select,
+.inline-form input {
+  min-width: 0;
+  width: 100%;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(180px, .8fr) minmax(170px, .6fr);
@@ -586,6 +599,40 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .chip.warn { border-color: var(--warn); color: var(--warn); }
 .chip.bad, .score-pill.low { border-color: var(--bad); color: var(--bad); }
 .chip.blue { border-color: var(--blue); color: var(--blue); }
+
+.result-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.result-summary strong {
+  color: var(--ink);
+}
+
+.result-summary span {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+}
+
+.load-more-row {
+  width: 100%;
+  min-height: 44px;
+  border: 1px dashed var(--line-dark);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, .7);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.load-more-row:hover {
+  background: #fff;
+}
 
 .scanner-discovery {
   display: grid;
@@ -2014,8 +2061,9 @@ dialog::backdrop { background: rgba(20, 18, 13, .45); }
   .form-grid { grid-template-columns: 1fr; }
   .decision-item { grid-template-columns: 1fr; }
   .inbox-item { grid-template-columns: 1fr; }
-  .control-row, .inline-form { flex-wrap: wrap; }
-  .control-row input, .inline-form input { min-width: 0; width: 100%; }
+  .control-row { grid-template-columns: 1fr; }
+  .inline-form { flex-wrap: wrap; }
+  .control-row input, .control-row select, .inline-form input { min-width: 0; width: 100%; }
   .detail-actions { flex-wrap: wrap; }
   .detail-actions > * { flex: 1 1 auto; min-width: 0; }
   .console-actions, .feedback-actions, .fill-plan-actions { grid-template-columns: 1fr; }

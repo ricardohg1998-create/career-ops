@@ -14,6 +14,7 @@ export const state = {
   scanner: null,
   scannerSchedule: null,
   scannerStrategy: null,
+  opportunitiesVisible: 24,
   followups: null,
   patterns: null,
   selected: { kind: 'home', id: null },

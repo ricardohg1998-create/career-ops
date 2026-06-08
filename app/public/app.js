@@ -181,6 +181,95 @@ function scoreClass(score) {
   return '';
 }
 
+function normalizeText(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function compactLocation(value = '') {
+  const normalized = normalizeText(value);
+  if (!normalized) return '';
+  if (/\b(remote|remoto|anywhere)\b/.test(normalized)) return 'Remote';
+  if (/\b(spain|espana|españa|madrid|barcelona|valencia)\b/.test(normalized)) return 'Spain';
+  if (/\b(europe|europa|emea|eu|dach|uk|london|paris|berlin|amsterdam)\b/.test(normalized)) return 'Europe / EMEA';
+  if (/\b(us|usa|united states|north america|nyc|new york|san francisco|california|canada)\b/.test(normalized)) return 'US / North America';
+  if (/\b(apac|india|singapore|japan|australia)\b/.test(normalized)) return 'APAC';
+  return String(value).split(/[|,;/]/)[0].trim() || 'Sin ubicacion';
+}
+
+function pipelineDiscoveryMeta() {
+  const entries = state.scanner?.entries || [];
+  const byUrl = new Map(entries.filter(item => item.url).map(item => [item.url, item]));
+  const byPair = new Map(entries.map(item => [`${normalizeText(item.company)}|${normalizeText(item.title)}`, item]));
+  return { byUrl, byPair };
+}
+
+function enrichOpportunity(item = {}, lookup = pipelineDiscoveryMeta()) {
+  const scan = lookup.byUrl.get(item.url) || lookup.byPair.get(`${normalizeText(item.company)}|${normalizeText(item.role)}`) || {};
+  const portal = scan.portal || item.portal || item.sourceHost || '';
+  const location = scan.location || item.location || '';
+  return {
+    ...item,
+    portal,
+    location,
+    locationGroup: compactLocation(location),
+    firstSeen: scan.firstSeen || item.firstSeen || '',
+    confidence: scan.confidence || item.confidence || null,
+  };
+}
+
+function uniqueSorted(values = []) {
+  return [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+}
+
+function syncSelectOptions(select, values = [], allLabel = 'Todas') {
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = `<option value="">${escapeHtml(allLabel)}</option>${uniqueSorted(values)
+    .map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
+    .join('')}`;
+  select.value = [...select.options].some(option => option.value === current) ? current : '';
+}
+
+function opportunityMatchesFilters(item = {}, filters = {}) {
+  const hay = [
+    item.url,
+    item.company,
+    item.role,
+    item.title,
+    item.sourceHost,
+    item.portal,
+    item.location,
+    item.locationGroup,
+  ].join(' ');
+  const normalizedHay = normalizeText(hay);
+  if (filters.query && !normalizedHay.includes(filters.query)) return false;
+  if (filters.status === 'pending' && item.done) return false;
+  if (filters.status === 'duplicates' && !item.duplicateCandidate) return false;
+  if (filters.status === 'evaluated' && !item.evaluatedCandidate) return false;
+  if (filters.portal && item.portal !== filters.portal) return false;
+  if (filters.location && item.locationGroup !== filters.location) return false;
+  if (filters.discoveryState && item.state !== filters.discoveryState) return false;
+  if (filters.confidence && item.confidence?.level !== filters.confidence) return false;
+  return true;
+}
+
+function sortOpportunities(rows = [], sort = 'recent') {
+  const sorted = [...rows];
+  if (sort === 'company') sorted.sort((a, b) => String(a.company || '').localeCompare(String(b.company || ''), 'es', { sensitivity: 'base' }));
+  else if (sort === 'role') sorted.sort((a, b) => String(a.role || a.title || '').localeCompare(String(b.role || b.title || ''), 'es', { sensitivity: 'base' }));
+  else if (sort === 'portal') sorted.sort((a, b) => String(a.portal || '').localeCompare(String(b.portal || ''), 'es', { sensitivity: 'base' }));
+  else sorted.sort((a, b) => {
+    const dateCompare = String(b.firstSeen || '').localeCompare(String(a.firstSeen || ''));
+    return dateCompare || Number(b.id || 0) - Number(a.id || 0);
+  });
+  return sorted;
+}
+
 /* ═══════════════════════════════════════════
    NAVIGATION
    ═══════════════════════════════════════════ */
@@ -452,7 +541,7 @@ function renderFollowupItem(item) {
    OPORTUNIDADES
    ═══════════════════════════════════════════ */
 
-function renderOpportunities() {
+function renderOpportunitiesLegacy() {
   const query = ($('#pipeline-search')?.value || '').toLowerCase();
   const filter = $('#pipeline-filter')?.value || 'pending';
   renderScannerDiscovery();
@@ -2155,6 +2244,60 @@ function mutationFilesForAction(path = '') {
    EVENT WIRING
    ═══════════════════════════════════════════ */
 
+function renderOpportunities() {
+  const query = normalizeText($('#pipeline-search')?.value || '');
+  const filters = {
+    query,
+    status: $('#pipeline-filter')?.value || 'pending',
+    portal: $('#pipeline-portal-filter')?.value || '',
+    location: $('#pipeline-location-filter')?.value || '',
+  };
+  const sort = $('#pipeline-sort')?.value || 'recent';
+  const lookup = pipelineDiscoveryMeta();
+  const enriched = state.pipeline.map(item => enrichOpportunity(item, lookup));
+  syncSelectOptions($('#pipeline-portal-filter'), enriched.map(item => item.portal), 'Todos los portales');
+  syncSelectOptions($('#pipeline-location-filter'), enriched.map(item => item.locationGroup), 'Todas las ubicaciones');
+  renderScannerDiscovery();
+
+  const rows = sortOpportunities(enriched.filter(item => opportunityMatchesFilters(item, filters)), sort);
+  const visibleRows = rows.slice(0, state.opportunitiesVisible);
+  const summary = $('#pipeline-result-summary');
+  if (summary) {
+    const pending = enriched.filter(item => !item.done).length;
+    summary.innerHTML = `
+      <strong>${rows.length}</strong> de ${enriched.length} oportunidades
+      <span>${pending} pendientes</span>
+      ${filters.portal ? `<span>${escapeHtml(filters.portal)}</span>` : ''}
+      ${filters.location ? `<span>${escapeHtml(filters.location)}</span>` : ''}
+    `;
+  }
+
+  $('#pipeline-list').innerHTML = visibleRows.map(item => `
+    <button class="inbox-item ${state.selected.kind === 'pipeline' && state.selected.id === item.id ? 'selected' : ''}" data-select-pipeline="${item.id}">
+      <span class="status-dot ${item.done ? 'done' : ''}"></span>
+      <span>
+        <strong>${escapeHtml(item.company || item.sourceHost || 'Sin empresa')}</strong>
+        <small>${escapeHtml(item.role || item.url)}</small>
+        <small>${escapeHtml([item.firstSeen, item.location, item.portal].filter(Boolean).join(' Â· '))}</small>
+      </span>
+      <span class="chip-row">
+        ${item.duplicateCandidate ? '<em class="chip warn">duplicada</em>' : ''}
+        ${item.evaluatedCandidate ? '<em class="chip blue">evaluada</em>' : ''}
+        ${item.locationGroup ? `<em class="chip">${escapeHtml(item.locationGroup)}</em>` : ''}
+        ${item.portal ? `<em class="chip">${escapeHtml(item.portal)}</em>` : ''}
+      </span>
+    </button>
+  `).join('') || '<div class="empty-state"><span class="empty-icon">â—Ž</span><span class="empty-title">Sin entradas</span><span class="empty-subtitle">No hay entradas para este filtro.</span></div>';
+
+  if (rows.length > visibleRows.length) {
+    $('#pipeline-list').insertAdjacentHTML('beforeend', `
+      <button class="load-more-row" type="button" data-load-more-opportunities>
+        Mostrar ${Math.min(24, rows.length - visibleRows.length)} mÃ¡s de ${rows.length - visibleRows.length}
+      </button>
+    `);
+  }
+}
+
 function wireEvents() {
   $$('.nav-item').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
 
@@ -2171,6 +2314,10 @@ function wireEvents() {
     }
     if (target.dataset.deletePipeline) await deletePipeline(target.dataset.deletePipeline);
     if (target.dataset.importDiscovery) await importDiscoveryOffer(target.dataset.importDiscovery);
+    if (target.dataset.loadMoreOpportunities !== undefined) {
+      state.opportunitiesVisible += 24;
+      renderOpportunities();
+    }
     if (target.dataset.livenessPipeline) await verifyPipeline(target.dataset.livenessPipeline);
     if (target.dataset.openReportPath) {
       const id = target.dataset.openReportPath.split('/').pop().replace(/\.md$/, '');
@@ -2251,8 +2398,23 @@ function wireEvents() {
     }
   });
 
-  $('#pipeline-search').addEventListener('input', renderOpportunities);
-  $('#pipeline-filter').addEventListener('change', renderOpportunities);
+  const resetOpportunityFilters = () => {
+    state.opportunitiesVisible = 24;
+    renderOpportunities();
+  };
+  $('#pipeline-search').addEventListener('input', resetOpportunityFilters);
+  $('#pipeline-filter').addEventListener('change', resetOpportunityFilters);
+  $('#pipeline-portal-filter')?.addEventListener('change', resetOpportunityFilters);
+  $('#pipeline-location-filter')?.addEventListener('change', resetOpportunityFilters);
+  $('#pipeline-sort')?.addEventListener('change', resetOpportunityFilters);
+  $('#pipeline-clear-filters')?.addEventListener('click', () => {
+    $('#pipeline-search').value = '';
+    $('#pipeline-filter').value = 'pending';
+    $('#pipeline-portal-filter').value = '';
+    $('#pipeline-location-filter').value = '';
+    $('#pipeline-sort').value = 'recent';
+    resetOpportunityFilters();
+  });
   $('#scanner-strategy-form')?.addEventListener('submit', saveScannerStrategy);
   $('#reload-scanner-strategy')?.addEventListener('click', reloadScannerStrategy);
   $('#application-search').addEventListener('input', renderApplications);
